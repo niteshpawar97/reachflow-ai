@@ -1,0 +1,33 @@
+{
+  "name": "@reachflow/database",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ReachFlow AI — Prisma schema, client, and Nest module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "prisma:generate": "dotenv -e ../../.env -- prisma generate",
+    "migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
+    "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "migrate:reset": "dotenv -e ../../.env -- prisma migrate reset",
+    "db:push": "dotenv -e ../../.env -- prisma db push",
+    "db:seed": "dotenv -e ../../.env -- ts-node prisma/seed.ts",
+    "studio": "dotenv -e ../../.env -- prisma studio"
+  },
+  "prisma": {
+    "seed": "dotenv -e ../../.env -- ts-node prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^10.4.15",
+    "@types/node": "^22.10.2",
+    "dotenv-cli": "^7.4.4",
+    "prisma": "^6.2.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}

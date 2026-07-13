@@ -1,0 +1,80 @@
+// ReachFlow AI — Prisma schema.
+// Conventions (see docs/05-database.md): uuid PKs, snake_case columns/tables via @map,
+// timestamptz timestamps, soft-delete via deleted_at, workspace_id tenancy seam on domain tables.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Global platform role (across the whole app).
+enum UserRole {
+  ADMIN
+  STAFF
+  CLIENT
+}
+
+// Role within a specific workspace (tenant).
+enum WorkspaceRole {
+  ADMIN
+  STAFF
+  CLIENT
+}
+
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String    @unique
+  passwordHash    String?   @map("password_hash")
+  name            String?
+  avatarUrl       String?   @map("avatar_url")
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz(6)
+  roleGlobal      UserRole  @default(CLIENT) @map("role_global")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  ownedWorkspaces Workspace[]       @relation("WorkspaceOwner")
+  memberships     WorkspaceMember[]
+
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Workspace {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String    @unique
+  ownerUserId String    @map("owner_user_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  owner   User              @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  members WorkspaceMember[]
+
+  @@index([ownerUserId])
+  @@index([deletedAt])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        WorkspaceRole @default(STAFF)
+  invitedAt   DateTime?     @map("invited_at") @db.Timestamptz(6)
+  joinedAt    DateTime?     @map("joined_at") @db.Timestamptz(6)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("workspace_members")
+}
