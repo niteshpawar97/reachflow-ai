@@ -6,6 +6,7 @@ import { LoggerModule } from 'nestjs-pino';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { PrismaModule } from '@reachflow/database';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 
 @Module({
@@ -31,6 +32,7 @@ import { HealthModule } from './modules/health/health.module';
     }),
     PrismaModule,
     HealthModule,
+    AuthModule,
   ],
   providers: [
     {
