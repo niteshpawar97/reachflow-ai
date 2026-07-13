@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Module } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { PrismaModule } from '@reachflow/database';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
@@ -31,6 +32,12 @@ import { WorkspaceModule } from './modules/workspace/workspace.module';
             : { target: 'pino-pretty', options: { singleLine: true } },
       },
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: Number(process.env.RATE_LIMIT_TTL ?? 60000),
+        limit: Number(process.env.RATE_LIMIT_MAX ?? 120),
+      },
+    ]),
     PrismaModule,
     HealthModule,
     WorkspaceModule,
@@ -40,6 +47,10 @@ import { WorkspaceModule } from './modules/workspace/workspace.module';
     {
       provide: APP_FILTER,
       useClass: AllExceptionsFilter,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })

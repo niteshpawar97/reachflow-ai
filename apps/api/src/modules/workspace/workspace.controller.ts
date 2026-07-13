@@ -11,7 +11,11 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { WorkspaceRole } from '@reachflow/database';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
+import { Roles } from '../../common/roles.decorator';
+import { WorkspaceGuard, type WorkspaceContext } from '../../common/workspace.guard';
+import { WorkspaceCtx } from '../../common/workspace-context.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard, type AuthUser } from '../auth/guards/jwt-auth.guard';
 import {
@@ -91,5 +95,18 @@ export class WorkspaceController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<unknown> {
     return this.workspaces.listMembers(user.userId, id);
+  }
+
+  // Demonstrates the reusable tenant-scoping stack (WorkspaceGuard resolves +
+  // verifies membership -> req.workspace) plus @Roles RBAC. Future workspace-
+  // scoped modules (leads, campaigns, ...) reuse this exact pattern.
+  @Get(':id/context')
+  @UseGuards(WorkspaceGuard)
+  @Roles(WorkspaceRole.ADMIN)
+  context(
+    @Param('id', ParseUUIDPipe) _id: string,
+    @WorkspaceCtx() ctx: WorkspaceContext | undefined,
+  ): WorkspaceContext | undefined {
+    return ctx;
   }
 }

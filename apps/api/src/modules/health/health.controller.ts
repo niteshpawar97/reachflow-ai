@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, UsePipes } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { PrismaService } from '@reachflow/database';
 import { z } from 'zod';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
@@ -43,5 +44,12 @@ export class HealthController {
   @UsePipes(new ZodValidationPipe(EchoSchema))
   echo(@Body() body: EchoDto): { echoed: EchoDto } {
     return { echoed: body };
+  }
+
+  // Tight per-route limit to demonstrate rate limiting (global default is looser).
+  @Get('rate-limited')
+  @Throttle({ default: { limit: 3, ttl: 10_000 } })
+  rateLimited(): { ok: true } {
+    return { ok: true };
   }
 }
