@@ -1,0 +1,34 @@
+{
+  "name": "reachflow-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered cold email & lead generation platform",
+  "workspaces": [
+    "apps/*",
+    "libs/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run start:dev --workspace @reachflow/api",
+    "dev:worker": "npm run start:dev --workspace @reachflow/worker",
+    "dev:web": "npm run dev --workspace @reachflow/web",
+    "build": "npm run build --workspaces --if-present",
+    "build:api": "npm run build --workspace @reachflow/api",
+    "build:worker": "npm run build --workspace @reachflow/worker",
+    "build:web": "npm run build --workspace @reachflow/web",
+    "lint": "eslint \"apps/**/src/**/*.{ts,tsx}\" \"libs/**/src/**/*.ts\"",
+    "format": "prettier --write \"apps/**/src/**/*.{ts,tsx}\" \"libs/**/src/**/*.ts\"",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
