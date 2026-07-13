@@ -72,12 +72,30 @@ model Workspace {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  owner   User              @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  members WorkspaceMember[]
+  owner    User               @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  members  WorkspaceMember[]
+  settings WorkspaceSettings?
 
   @@index([ownerUserId])
   @@index([deletedAt])
   @@map("workspaces")
+}
+
+// 1:1 settings for a workspace. JSONB blobs hold evolving config so we don't
+// churn the schema (sending windows, from-identity, compliance identity).
+model WorkspaceSettings {
+  id             String   @id @default(uuid()) @db.Uuid
+  workspaceId    String   @unique @map("workspace_id") @db.Uuid
+  timezone       String   @default("UTC")
+  sendingWindows Json?    @map("sending_windows")
+  fromIdentity   Json?    @map("from_identity")
+  compliance     Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_settings")
 }
 
 model WorkspaceMember {

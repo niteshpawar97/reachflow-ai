@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService, User } from '@reachflow/database';
 import * as bcrypt from 'bcryptjs';
+import { WorkspaceService } from '../workspace/workspace.service';
 import type { LoginDto, RegisterDto } from './dto/auth.dto';
 
 export interface RequestContext {
@@ -38,6 +39,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly workspaces: WorkspaceService,
   ) {}
 
   async register(dto: RegisterDto, ctx: RequestContext): Promise<AuthTokens> {
@@ -49,6 +51,11 @@ export class AuthService {
     const user = await this.prisma.user.create({
       data: { email: dto.email, name: dto.name ?? null, passwordHash },
     });
+    // Bootstrap a personal workspace so a new user has somewhere to work.
+    await this.workspaces.createForOwner(
+      user.id,
+      user.name ? `${user.name}'s Workspace` : 'My Workspace',
+    );
     return this.issueTokens(user, ctx);
   }
 
