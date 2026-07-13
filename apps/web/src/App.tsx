@@ -1,33 +1,32 @@
-import { useEffect, useState } from 'react';
-
-type Health = { status: string; service: string; timestamp: string };
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { Layout } from './components/Layout';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { LoginPage } from './features/auth/LoginPage';
+import { RegisterPage } from './features/auth/RegisterPage';
+import { useAuthBootstrap } from './features/auth/useAuth';
+import { DashboardPage } from './pages/DashboardPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 export function App() {
-  const [health, setHealth] = useState<Health | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL ?? '/api';
-    fetch(`${apiUrl}/health`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((data: Health) => setHealth(data))
-      .catch((e: Error) => setError(e.message));
-  }, []);
+  useAuthBootstrap();
 
   return (
-    <main className="shell">
-      <h1>ReachFlow AI</h1>
-      <p className="tagline">AI-powered cold email &amp; lead generation — Milestone 1 scaffold.</p>
-      <section className="status">
-        <span className="label">API status:</span>{' '}
-        {health ? (
-          <span className="ok">{health.status} · {health.service}</span>
-        ) : error ? (
-          <span className="err">unreachable ({error})</span>
-        ) : (
-          <span className="pending">checking…</span>
-        )}
-      </section>
-    </main>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
