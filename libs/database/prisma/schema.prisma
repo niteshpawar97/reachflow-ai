@@ -72,9 +72,12 @@ model Workspace {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  owner    User               @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  members  WorkspaceMember[]
-  settings WorkspaceSettings?
+  owner     User               @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  members   WorkspaceMember[]
+  settings  WorkspaceSettings?
+  companies Company[]
+  contacts  Contact[]
+  leads     Lead[]
 
   @@index([ownerUserId])
   @@index([deletedAt])
@@ -114,4 +117,119 @@ model WorkspaceMember {
   @@index([workspaceId])
   @@index([userId])
   @@map("workspace_members")
+}
+
+// --- Leads domain (Phase D) ---
+
+enum LeadSource {
+  MANUAL
+  IMPORT
+  GOOGLE_MAPS
+  WEBSITE
+  DIRECTORY
+}
+
+enum LeadStatus {
+  NEW
+  ENRICHING
+  SCORED
+  READY
+  IN_CAMPAIGN
+  REPLIED
+  WON
+  LOST
+  SUPPRESSED
+}
+
+enum ContactRole {
+  FOUNDER
+  CEO
+  OWNER
+  DIRECTOR
+  MARKETING
+  IT
+  OPERATIONS
+  OTHER
+}
+
+enum EmailStatus {
+  UNKNOWN
+  VALID
+  INVALID
+  RISKY
+  CATCH_ALL
+}
+
+model Company {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  website     String?
+  domain      String?
+  industry    String?
+  sizeBand    String?   @map("size_band")
+  country     String?
+  city        String?
+  techStack   Json?     @map("tech_stack")
+  socials     Json?
+  revenueBand String?   @map("revenue_band")
+  raw         Json?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contacts  Contact[]
+  leads     Lead[]
+
+  @@index([workspaceId, domain])
+  @@index([workspaceId, deletedAt])
+  @@map("companies")
+}
+
+model Contact {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  companyId   String       @map("company_id") @db.Uuid
+  name        String?
+  title       String?
+  roleType    ContactRole? @map("role_type")
+  email       String?
+  emailStatus EmailStatus  @default(UNKNOWN) @map("email_status")
+  linkedinUrl String?      @map("linkedin_url")
+  confidence  Int?
+  raw         Json?
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leads     Lead[]
+
+  @@index([workspaceId, companyId])
+  @@index([workspaceId, email])
+  @@map("contacts")
+}
+
+model Lead {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  companyId   String     @map("company_id") @db.Uuid
+  contactId   String?    @map("contact_id") @db.Uuid
+  source      LeadSource @default(MANUAL)
+  sourceKey   String?    @map("source_key")
+  status      LeadStatus @default(NEW)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contact   Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, source, sourceKey])
+  @@index([workspaceId, status])
+  @@index([workspaceId, deletedAt])
+  @@map("leads")
 }

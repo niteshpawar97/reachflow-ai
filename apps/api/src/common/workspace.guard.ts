@@ -68,10 +68,11 @@ export class WorkspaceGuard implements CanActivate {
   }
 
   private resolveWorkspaceId(req: WorkspaceScopedRequest): string | undefined {
+    // Only an explicit :workspaceId param or the X-Workspace-Id header — never a
+    // bare :id (which on nested resources is the child id, e.g. a lead id).
     const params = req.params as Record<string, string> | undefined;
-    const fromParam = params?.workspaceId ?? params?.id;
-    if (fromParam) {
-      return fromParam;
+    if (params?.workspaceId) {
+      return params.workspaceId;
     }
     const header = req.headers['x-workspace-id'];
     return Array.isArray(header) ? header[0] : header;

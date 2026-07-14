@@ -100,11 +100,11 @@ export class WorkspaceController {
   // Demonstrates the reusable tenant-scoping stack (WorkspaceGuard resolves +
   // verifies membership -> req.workspace) plus @Roles RBAC. Future workspace-
   // scoped modules (leads, campaigns, ...) reuse this exact pattern.
-  @Get(':id/context')
+  @Get(':workspaceId/context')
   @UseGuards(WorkspaceGuard)
   @Roles(WorkspaceRole.ADMIN)
   context(
-    @Param('id', ParseUUIDPipe) _id: string,
+    @Param('workspaceId', ParseUUIDPipe) _id: string,
     @WorkspaceCtx() ctx: WorkspaceContext | undefined,
   ): WorkspaceContext | undefined {
     return ctx;
