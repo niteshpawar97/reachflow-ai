@@ -81,3 +81,26 @@ export async function importLeadsCsv(csv: string): Promise<ImportResult> {
   const { data } = await api.post<ImportResult>('/leads/import', { csv });
   return data;
 }
+
+export interface EmailDraft {
+  id: string;
+  subject: string;
+  body: string;
+  provider: string;
+  model: string;
+  tier: string;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: string | number;
+  createdAt: string;
+}
+
+export async function generateLeadEmail(id: string): Promise<EmailDraft> {
+  const { data } = await api.post<EmailDraft>(`/leads/${id}/email`);
+  return data;
+}
+
+export async function listLeadEmails(id: string): Promise<EmailDraft[]> {
+  const { data } = await api.get<EmailDraft[]>(`/leads/${id}/email`);
+  return data;
+}

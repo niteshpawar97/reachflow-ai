@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from 'react';
 import { extractApiError } from '../lib/api';
-import type { ImportResult, Lead, LeadStatus } from '../features/leads/leads.api';
+import type { EmailDraft, ImportResult, Lead, LeadStatus } from '../features/leads/leads.api';
 import {
   useCreateLead,
   useDeleteLead,
+  useGenerateEmail,
   useImportLeads,
+  useLeadEmails,
   useLeads,
   useUpdateLeadStatus,
 } from '../features/leads/useLeads';
@@ -237,6 +239,77 @@ function LeadDrawer({
             ))}
           </select>
         </div>
+
+        <EmailSection lead={lead} />
+      </div>
+    </div>
+  );
+}
+
+function EmailSection({ lead }: { lead: Lead }) {
+  const { data: emails, isLoading } = useLeadEmails(lead.id);
+  const generate = useGenerateEmail(lead.id);
+  const [err, setErr] = useState<string | null>(null);
+
+  const run = async (): Promise<void> => {
+    setErr(null);
+    try {
+      await generate.mutateAsync();
+    } catch (e) {
+      setErr(extractApiError(e));
+    }
+  };
+
+  return (
+    <div className="mt-6 border-t border-surface-border pt-4">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-semibold">AI cold email</h3>
+        <button className="btn-primary py-1 text-xs" disabled={generate.isPending} onClick={() => void run()}>
+          {generate.isPending ? 'Generating…' : (emails?.length ? 'Regenerate' : 'Generate email')}
+        </button>
+      </div>
+      <p className="mb-3 text-xs text-slate-500">
+        Personalized from this lead&apos;s website audit + score.
+      </p>
+
+      {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
+      {isLoading && <p className="text-sm text-slate-500">Loading…</p>}
+      {!isLoading && !emails?.length && !generate.isPending && (
+        <p className="text-sm text-slate-500">No email generated yet.</p>
+      )}
+
+      <div className="space-y-3">
+        {emails?.map((e) => (
+          <EmailCard key={e.id} email={e} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmailCard({ email }: { email: EmailDraft }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async (): Promise<void> => {
+    await navigator.clipboard.writeText(`Subject: ${email.subject}\n\n${email.body}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const cost = Number(email.costUsd);
+
+  return (
+    <div className="rounded-lg border border-surface-border bg-surface p-3">
+      <div className="mb-1 text-xs font-medium text-slate-400">Subject</div>
+      <div className="mb-2 text-sm font-medium text-slate-100">{email.subject}</div>
+      <div className="whitespace-pre-wrap text-sm text-slate-300">{email.body}</div>
+      <div className="mt-3 flex items-center justify-between border-t border-surface-border pt-2">
+        <span className="text-[11px] text-slate-500">
+          {email.provider}/{email.model} · {email.outputTokens} tok · ~${cost.toFixed(4)}
+        </span>
+        <button className="btn-ghost py-1 text-xs" onClick={() => void copy()}>
+          {copied ? 'Copied ✓' : 'Copy'}
+        </button>
       </div>
     </div>
   );

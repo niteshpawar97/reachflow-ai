@@ -3,7 +3,9 @@ import { useWorkspaceStore } from '../../store/workspace.store';
 import {
   createLead,
   deleteLead,
+  generateLeadEmail,
   importLeadsCsv,
+  listLeadEmails,
   listLeads,
   updateLeadStatus,
   type CreateLeadPayload,
@@ -49,5 +51,22 @@ export function useImportLeads() {
   return useMutation({
     mutationFn: (csv: string) => importLeadsCsv(csv),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['leads'] }),
+  });
+}
+
+export function useLeadEmails(leadId: string) {
+  const wsId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  return useQuery({
+    queryKey: ['lead-emails', wsId, leadId],
+    queryFn: () => listLeadEmails(leadId),
+    enabled: Boolean(wsId && leadId),
+  });
+}
+
+export function useGenerateEmail(leadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => generateLeadEmail(leadId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-emails'] }),
   });
 }
