@@ -50,6 +50,13 @@ export interface CampaignLeadRow {
   status: CampaignLeadStatus;
   currentStep: number;
   nextSendAt: string | null;
+  lastSentAt: string | null;
+  lastEventAt: string | null;
+  openCount: number;
+  clickCount: number;
+  openedAt: string | null;
+  clickedAt: string | null;
+  stopReason: string | null;
   lead: {
     id: string;
     status: string;

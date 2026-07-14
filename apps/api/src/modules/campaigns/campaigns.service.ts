@@ -184,6 +184,13 @@ export class CampaignsService {
       status: row.status,
       currentStep: row.currentStep,
       nextSendAt: row.nextSendAt,
+      lastSentAt: row.lastSentAt,
+      lastEventAt: row.lastEventAt,
+      openCount: row.openCount,
+      clickCount: row.clickCount,
+      openedAt: row.openedAt,
+      clickedAt: row.clickedAt,
+      stopReason: row.stopReason,
       lead: row.lead,
     }));
   }

@@ -13,10 +13,12 @@ import {
 } from '../features/campaigns/campaigns.api';
 import {
   useCampaign,
+  useCampaignLeads,
   useCampaigns,
   useCreateCampaign,
 } from '../features/campaigns/useCampaigns';
 import type {
+  CampaignLeadRow,
   CampaignStepMode,
   CampaignStepTrigger,
   RunDueResult,
@@ -416,8 +418,83 @@ export function CampaignsPage() {
           ) : (
             <p className="text-sm text-slate-500">Select or create a campaign to review it here.</p>
           )}
+
+          {activeCampaign && <CampaignLeadsMonitor campaignId={activeCampaign.id} />}
         </section>
       </div>
+    </div>
+  );
+}
+
+const CL_STATUS_CLASS: Record<string, string> = {
+  SENT: 'bg-blue-500/15 text-blue-300',
+  OPENED: 'bg-cyan-500/15 text-cyan-300',
+  REPLIED: 'bg-green-500/15 text-green-300',
+  BOUNCED: 'bg-red-500/15 text-red-300',
+  STOPPED: 'bg-slate-500/15 text-slate-400',
+  SKIPPED: 'bg-slate-500/15 text-slate-400',
+  PENDING: 'bg-amber-500/15 text-amber-300',
+  QUEUED: 'bg-amber-500/15 text-amber-300',
+  SENDING: 'bg-amber-500/15 text-amber-300',
+};
+
+function CampaignLeadsMonitor({ campaignId }: { campaignId: string }) {
+  const { data: rows, isLoading } = useCampaignLeads(campaignId);
+
+  return (
+    <div className="border-t border-surface-border pt-4">
+      <h3 className="mb-2 text-sm font-semibold">Lead progress</h3>
+      {isLoading && <p className="text-sm text-slate-500">Loading…</p>}
+      {!isLoading && !rows?.length && <p className="text-sm text-slate-500">No leads attached yet.</p>}
+      {!!rows?.length && (
+        <div className="max-h-96 overflow-y-auto rounded-lg border border-surface-border">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 bg-surface text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Lead</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Step</th>
+                <th className="px-3 py-2">Opens</th>
+                <th className="px-3 py-2">Clicks</th>
+                <th className="px-3 py-2">Last sent</th>
+                <th className="px-3 py-2">Next send</th>
+                <th className="px-3 py-2">Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row: CampaignLeadRow) => (
+                <tr key={row.id} className="border-t border-surface-border">
+                  <td className="px-3 py-2">
+                    <div className="font-medium text-slate-100">{row.lead.company.name}</div>
+                    <div className="text-xs text-slate-500">{row.lead.contact?.email ?? '—'}</div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] ${
+                        CL_STATUS_CLASS[row.status] ?? 'bg-white/10 text-slate-300'
+                      }`}
+                    >
+                      {row.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-slate-300">{row.currentStep}</td>
+                  <td className="px-3 py-2 text-slate-300">{row.openCount}</td>
+                  <td className="px-3 py-2 text-slate-300">{row.clickCount}</td>
+                  <td className="px-3 py-2 text-xs text-slate-500">
+                    {row.lastSentAt ? new Date(row.lastSentAt).toLocaleString() : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-slate-500">
+                    {row.nextSendAt ? new Date(row.nextSendAt).toLocaleString() : '—'}
+                  </td>
+                  <td className="max-w-[160px] truncate px-3 py-2 text-xs text-slate-500" title={row.stopReason ?? ''}>
+                    {row.stopReason ?? '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
