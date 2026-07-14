@@ -4,7 +4,10 @@ import { chromium, type Page } from 'playwright';
 import type { DiscoveredBusiness, DiscoveryResult } from './business-discovery.service';
 
 const DEFAULT_TIMEOUT = 30_000;
-const MAX_RESULTS = 25;
+// A small initial batch keeps an interactive HTTP request responsive. The
+// scraper opens each listing's details page to obtain phone/website data.
+const MAX_RESULTS = Number(process.env.GOOGLE_MAPS_MAX_RESULTS ?? 6);
+const DETAIL_CONCURRENCY = 3;
 
 @Injectable()
 export class GoogleMapsDiscoveryService {
@@ -26,9 +29,9 @@ export class GoogleMapsDiscoveryService {
         locale: 'en-US',
         viewport: { width: 1440, height: 900 },
       });
+      await context.route('**/*.{png,jpg,jpeg,gif,svg,ico,woff,woff2}', (route) => route.abort());
       const page = await context.newPage();
       page.setDefaultTimeout(DEFAULT_TIMEOUT);
-      await page.route('**/*.{png,jpg,jpeg,gif,svg,ico,woff,woff2}', (route) => route.abort());
 
       await page.goto(`https://www.google.com/maps/search/${encodeURIComponent(query)}`, {
         waitUntil: 'domcontentloaded',
@@ -41,22 +44,38 @@ export class GoogleMapsDiscoveryService {
       const urls = await page.$$eval('a[href*="/maps/place/"]', (links) =>
         [...new Set(links.map((link) => link.getAttribute('href')).filter((href): href is string => Boolean(href)))],
       );
-      const businesses: DiscoveredBusiness[] = [];
+      const detailUrls = urls.slice(0, limit);
+      const batches = await Promise.all(
+        Array.from({ length: Math.min(DETAIL_CONCURRENCY, detailUrls.length) }, async (_, worker) => {
+          const detailPage = await context.newPage();
+          detailPage.setDefaultTimeout(DEFAULT_TIMEOUT);
+          const collected: DiscoveredBusiness[] = [];
+          try {
+            for (let index = worker; index < detailUrls.length; index += DETAIL_CONCURRENCY) {
+              const url = detailUrls[index];
+              if (!url) continue;
+              try {
+                await detailPage.goto(url, { waitUntil: 'domcontentloaded', timeout: DEFAULT_TIMEOUT });
+                await detailPage.waitForSelector('h1', { timeout: 8_000 });
+                const business = await this.extractBusiness(detailPage, category);
+                if (business) collected.push(business);
+                await detailPage.waitForTimeout(250);
+              } catch (error) {
+                this.logger.warn(`Skipped a Google Maps listing: ${this.message(error)}`);
+              }
+            }
+          } finally {
+            await detailPage.close();
+          }
+          return collected;
+        }),
+      );
       const seen = new Set<string>();
-
-      for (const url of urls.slice(0, limit)) {
-        try {
-          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: DEFAULT_TIMEOUT });
-          await page.waitForSelector('h1', { timeout: 8_000 });
-          const business = await this.extractBusiness(page, category);
-          if (!business || seen.has(business.osmId)) continue;
-          seen.add(business.osmId);
-          businesses.push(business);
-          await page.waitForTimeout(700);
-        } catch (error) {
-          this.logger.warn(`Skipped a Google Maps listing: ${this.message(error)}`);
-        }
-      }
+      const businesses = batches.flat().filter((business) => {
+        if (seen.has(business.osmId)) return false;
+        seen.add(business.osmId);
+        return true;
+      });
 
       await context.close();
       return { location, category, count: businesses.length, businesses };

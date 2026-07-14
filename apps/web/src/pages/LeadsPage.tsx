@@ -709,6 +709,7 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
   const importBiz = useImportBusinesses();
   const [source, setSource] = useState<DiscoverySource>('GOOGLE_MAPS');
   const [category, setCategory] = useState('bakery');
+  const [resultLimit, setResultLimit] = useState(3);
   const [location, setLocation] = useState('');
   const [results, setResults] = useState<DiscoveredBusiness[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -741,7 +742,7 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
     setResults([]);
     setSelected(new Set());
     try {
-      const r = await search.mutateAsync({ source, category, location, limit: 25 });
+      const r = await search.mutateAsync({ source, category, location, limit: resultLimit });
       setResults(r.businesses);
       setSelected(new Set(r.businesses.map((b) => b.osmId)));
     } catch (e) {
@@ -809,6 +810,13 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
               ))}
             </select>
           </div>
+          <div className="w-36">
+            <label className="label">Results</label>
+            <select className="input w-full" value={resultLimit} disabled={search.isPending} onChange={(e) => setResultLimit(Number(e.target.value))}>
+              <option value={3}>Fast · 3</option>
+              <option value={6}>Standard · 6</option>
+            </select>
+          </div>
           <div className="min-w-56 flex-1">
             <label className="label">City, country</label>
             <input
@@ -835,7 +843,7 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
 
         <div className="mt-3 rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs text-slate-400">
           {source === 'GOOGLE_MAPS'
-            ? 'Google Maps is scraped live without an API key. Searches return up to 25 listings and usually take 30–90 seconds.'
+            ? `Google Maps is scraped live without an API key. ${resultLimit === 3 ? 'Fast mode returns 3 detailed listings in roughly 30–60 seconds.' : 'Standard mode returns up to 6 detailed listings and can take 1–2 minutes.'}`
             : 'OpenStreetMap is a free fallback; coverage and contact details vary by area.'}
         </div>
 
