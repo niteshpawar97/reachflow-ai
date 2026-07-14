@@ -72,19 +72,20 @@ model Workspace {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  owner     User               @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  members       WorkspaceMember[]
-  settings      WorkspaceSettings?
-  companies     Company[]
-  contacts      Contact[]
-  leads         Lead[]
-  campaigns     Campaign[]
-  campaignSteps CampaignStep[]
-  campaignLeads CampaignLead[]
+  owner              User                @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  members            WorkspaceMember[]
+  settings           WorkspaceSettings?
+  companies          Company[]
+  contacts           Contact[]
+  leads              Lead[]
+  campaigns          Campaign[]
+  campaignSteps      CampaignStep[]
+  campaignLeads      CampaignLead[]
   websiteAudits      WebsiteAudit[]
   leadScores         LeadScore[]
   emailVerifications EmailVerification[]
   emailDrafts        EmailDraft[]
+  mailboxes          Mailbox[]
 
   @@index([ownerUserId])
   @@index([deletedAt])
@@ -232,11 +233,11 @@ model Lead {
   updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt   DateTime?  @map("deleted_at") @db.Timestamptz(6)
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  contact   Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  score     LeadScore?
-  emails    EmailDraft[]
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contact       Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  score         LeadScore?
+  emails        EmailDraft[]
   campaignLeads CampaignLead[]
 
   @@unique([workspaceId, source, sourceKey])
@@ -376,24 +377,24 @@ model WebsiteAudit {
 // website audit + score. Provider-agnostic: records which provider/model/tier
 // produced it plus token/cost, so output is auditable across Gemini/Claude.
 model EmailDraft {
-  id           String   @id @default(uuid()) @db.Uuid
-  workspaceId  String   @map("workspace_id") @db.Uuid
-  leadId       String   @map("lead_id") @db.Uuid
-  status       EmailDraftStatus @default(PENDING)
-  kind         EmailDraftKind   @default(INITIAL)
-  variantLabel String?          @map("variant_label")
-  sequenceIndex Int             @default(0) @map("sequence_index")
-  subject      String
-  body         String   @db.Text
-  provider     String
-  model        String
-  tier         String
-  inputTokens  Int      @default(0) @map("input_tokens")
-  outputTokens Int      @default(0) @map("output_tokens")
-  costUsd      Decimal  @default(0) @map("cost_usd") @db.Decimal(12, 6)
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz(6)
-  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+  id            String           @id @default(uuid()) @db.Uuid
+  workspaceId   String           @map("workspace_id") @db.Uuid
+  leadId        String           @map("lead_id") @db.Uuid
+  status        EmailDraftStatus @default(PENDING)
+  kind          EmailDraftKind   @default(INITIAL)
+  variantLabel  String?          @map("variant_label")
+  sequenceIndex Int              @default(0) @map("sequence_index")
+  subject       String
+  body          String           @db.Text
+  provider      String
+  model         String
+  tier          String
+  inputTokens   Int              @default(0) @map("input_tokens")
+  outputTokens  Int              @default(0) @map("output_tokens")
+  costUsd       Decimal          @default(0) @map("cost_usd") @db.Decimal(12, 6)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  reviewedAt    DateTime?        @map("reviewed_at") @db.Timestamptz(6)
+  deletedAt     DateTime?        @map("deleted_at") @db.Timestamptz(6)
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -405,23 +406,23 @@ model EmailDraft {
 // Campaign builder core (M44). A campaign is a sequenced outreach container
 // with a workspace-scoped offer, schedule, mailbox pool, and daily cap.
 model Campaign {
-  id              String         @id @default(uuid()) @db.Uuid
-  workspaceId     String         @map("workspace_id") @db.Uuid
-  name            String
-  offer           String         @db.Text
-  status          CampaignStatus @default(DRAFT)
-  timezone        String         @default("UTC")
-  schedule        Json?          @map("schedule")
-  mailboxPool     Json?          @map("mailbox_pool")
-  dailyCap        Int            @default(0) @map("daily_cap")
-  launchedAt      DateTime?      @map("launched_at") @db.Timestamptz(6)
-  pausedAt        DateTime?      @map("paused_at") @db.Timestamptz(6)
-  stoppedAt       DateTime?      @map("stopped_at") @db.Timestamptz(6)
-  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz(6)
+  id          String         @id @default(uuid()) @db.Uuid
+  workspaceId String         @map("workspace_id") @db.Uuid
+  name        String
+  offer       String         @db.Text
+  status      CampaignStatus @default(DRAFT)
+  timezone    String         @default("UTC")
+  schedule    Json?          @map("schedule")
+  mailboxPool Json?          @map("mailbox_pool")
+  dailyCap    Int            @default(0) @map("daily_cap")
+  launchedAt  DateTime?      @map("launched_at") @db.Timestamptz(6)
+  pausedAt    DateTime?      @map("paused_at") @db.Timestamptz(6)
+  stoppedAt   DateTime?      @map("stopped_at") @db.Timestamptz(6)
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?      @map("deleted_at") @db.Timestamptz(6)
 
-  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   steps     CampaignStep[]
   leads     CampaignLead[]
 
@@ -433,18 +434,18 @@ model Campaign {
 // Sequence step within a campaign. Supports both AI-generated and fixed copy,
 // plus trigger + delay so later scheduler/follow-up milestones can reuse it.
 model CampaignStep {
-  id            String              @id @default(uuid()) @db.Uuid
-  workspaceId   String              @map("workspace_id") @db.Uuid
-  campaignId    String              @map("campaign_id") @db.Uuid
-  position      Int
-  mode          CampaignStepMode    @default(AI)
-  trigger       CampaignStepTrigger @default(SEND)
-  delayMinutes  Int                 @default(0) @map("delay_minutes")
-  subject       String?
-  body          String?             @db.Text
-  aiPrompt      String?             @map("ai_prompt") @db.Text
-  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String              @id @default(uuid()) @db.Uuid
+  workspaceId  String              @map("workspace_id") @db.Uuid
+  campaignId   String              @map("campaign_id") @db.Uuid
+  position     Int
+  mode         CampaignStepMode    @default(AI)
+  trigger      CampaignStepTrigger @default(SEND)
+  delayMinutes Int                 @default(0) @map("delay_minutes")
+  subject      String?
+  body         String?             @db.Text
+  aiPrompt     String?             @map("ai_prompt") @db.Text
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   campaign  Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
@@ -486,4 +487,49 @@ model CampaignLead {
   @@index([workspaceId, nextSendAt])
   @@index([workspaceId, trackingToken])
   @@map("campaign_leads")
+}
+
+// --- Mailboxes (Phase C / M17) ---
+
+enum MailboxProvider {
+  SMTP
+  GMAIL
+  M365
+}
+
+enum MailboxStatus {
+  ACTIVE
+  DISCONNECTED
+  ERROR
+  PAUSED
+}
+
+// A sending identity. SMTP mailboxes are usable today (host/port/user/pass);
+// GMAIL/M365 arrive with OAuth. All secrets (SMTP password or OAuth tokens) are
+// stored AES-256-GCM encrypted in `secretCiphertext` and NEVER returned by the API.
+model Mailbox {
+  id               String          @id @default(uuid()) @db.Uuid
+  workspaceId      String          @map("workspace_id") @db.Uuid
+  provider         MailboxProvider @default(SMTP)
+  email            String
+  displayName      String?         @map("display_name")
+  status           MailboxStatus   @default(ACTIVE)
+  smtpHost         String?         @map("smtp_host")
+  smtpPort         Int?            @map("smtp_port")
+  smtpSecure       Boolean         @default(true) @map("smtp_secure")
+  smtpUsername     String?         @map("smtp_username")
+  secretCiphertext String?         @map("secret_ciphertext") @db.Text
+  dailyLimit       Int             @default(50) @map("daily_limit")
+  sentToday        Int             @default(0) @map("sent_today")
+  warmupEnabled    Boolean         @default(false) @map("warmup_enabled")
+  lastError        String?         @map("last_error")
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId, status])
+  @@map("mailboxes")
 }

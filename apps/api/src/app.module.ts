@@ -12,6 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { HealthModule } from './modules/health/health.module';
 import { LeadsModule } from './modules/leads/leads.module';
+import { MailboxModule } from './modules/mailbox/mailbox.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { WorkspaceModule } from './modules/workspace/workspace.module';
 
@@ -49,6 +50,7 @@ import { WorkspaceModule } from './modules/workspace/workspace.module';
     AuthModule,
     CampaignsModule,
     LeadsModule,
+    MailboxModule,
     TrackingModule,
   ],
   providers: [
