@@ -1,6 +1,12 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { parse } from 'csv-parse/sync';
 import { Prisma, PrismaService } from '@reachflow/database';
+import { WebsiteAnalyzerService } from '../website-analyzer/website-analyzer.service';
 import { CreateLeadSchema, type CreateLeadDto, type ListLeadsQuery, type UpdateLeadDto } from './dto/lead.dto';
 import { DEFAULT_MAPPING, type ImportResult } from './dto/import.dto';
 
@@ -8,7 +14,54 @@ const LEAD_INCLUDE = { company: true, contact: true } satisfies Prisma.LeadInclu
 
 @Injectable()
 export class LeadsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly analyzer: WebsiteAnalyzerService,
+  ) {}
+
+  /** Run a website audit for the lead's company and persist it (M34). */
+  async auditLead(workspaceId: string, leadId: string) {
+    const lead = await this.get(workspaceId, leadId);
+    const target =
+      lead.company.website ?? (lead.company.domain ? `https://${lead.company.domain}` : null);
+    if (!target) {
+      throw new BadRequestException('Lead company has no website or domain to audit');
+    }
+
+    const r = await this.analyzer.analyze(target);
+    return this.prisma.websiteAudit.create({
+      data: {
+        workspaceId,
+        companyId: lead.companyId,
+        url: r.url,
+        status: r.status,
+        https: r.https,
+        sslValid: r.sslValid,
+        statusCode: r.statusCode,
+        responseTimeMs: r.responseTimeMs,
+        title: r.title,
+        metaDescription: r.metaDescription,
+        h1Count: r.h1Count,
+        mobileFriendly: r.mobileFriendly,
+        hasContactForm: r.hasContactForm,
+        hasCta: r.hasCta,
+        cms: r.cms,
+        techStack: r.techStack,
+        findings: r.findings as unknown as Prisma.InputJsonValue,
+        performanceScore: r.performanceScore,
+        error: r.error,
+      },
+    });
+  }
+
+  /** Latest stored audit for the lead's company, or null. */
+  async getLatestAudit(workspaceId: string, leadId: string) {
+    const lead = await this.get(workspaceId, leadId);
+    return this.prisma.websiteAudit.findFirst({
+      where: { workspaceId, companyId: lead.companyId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
   async create(workspaceId: string, dto: CreateLeadDto) {
     return this.prisma.$transaction(async (tx) => {

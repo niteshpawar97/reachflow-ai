@@ -73,11 +73,12 @@ model Workspace {
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   owner     User               @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  members   WorkspaceMember[]
-  settings  WorkspaceSettings?
-  companies Company[]
-  contacts  Contact[]
-  leads     Lead[]
+  members       WorkspaceMember[]
+  settings      WorkspaceSettings?
+  companies     Company[]
+  contacts      Contact[]
+  leads         Lead[]
+  websiteAudits WebsiteAudit[]
 
   @@index([ownerUserId])
   @@index([deletedAt])
@@ -178,9 +179,10 @@ model Company {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   contacts  Contact[]
   leads     Lead[]
+  audits    WebsiteAudit[]
 
   @@index([workspaceId, domain])
   @@index([workspaceId, deletedAt])
@@ -232,4 +234,43 @@ model Lead {
   @@index([workspaceId, status])
   @@index([workspaceId, deletedAt])
   @@map("leads")
+}
+
+enum AuditStatus {
+  OK
+  PARTIAL
+  FAILED
+}
+
+// Result of analyzing a company's website — the evidence that powers
+// audit-driven personalization. AI narrative summary added in M35.
+model WebsiteAudit {
+  id               String      @id @default(uuid()) @db.Uuid
+  workspaceId      String      @map("workspace_id") @db.Uuid
+  companyId        String      @map("company_id") @db.Uuid
+  url              String
+  status           AuditStatus @default(OK)
+  https            Boolean     @default(false)
+  sslValid         Boolean     @default(false) @map("ssl_valid")
+  statusCode       Int?        @map("status_code")
+  responseTimeMs   Int?        @map("response_time_ms")
+  title            String?
+  metaDescription  String?     @map("meta_description")
+  h1Count          Int?        @map("h1_count")
+  mobileFriendly   Boolean     @default(false) @map("mobile_friendly")
+  hasContactForm   Boolean     @default(false) @map("has_contact_form")
+  hasCta           Boolean     @default(false) @map("has_cta")
+  cms              String?
+  techStack        Json?       @map("tech_stack")
+  findings         Json?
+  performanceScore Int?        @map("performance_score")
+  aiSummary        String?     @map("ai_summary")
+  error            String?
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, companyId])
+  @@map("website_audits")
 }

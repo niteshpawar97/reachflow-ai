@@ -65,6 +65,22 @@ export class LeadsController {
     return this.leads.get(workspaceId, id);
   }
 
+  @Post(':id/audit')
+  audit(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<unknown> {
+    return this.leads.auditLead(workspaceId, id);
+  }
+
+  @Get(':id/audit')
+  latestAudit(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<unknown> {
+    return this.leads.getLatestAudit(workspaceId, id);
+  }
+
   @Patch(':id')
   update(
     @WorkspaceId() workspaceId: string,

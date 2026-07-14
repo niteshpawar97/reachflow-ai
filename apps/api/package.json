@@ -20,6 +20,7 @@
     "@nestjs/throttler": "^6.4.0",
     "@reachflow/database": "*",
     "bcryptjs": "^2.4.3",
+    "cheerio": "^1.0.0",
     "csv-parse": "^5.6.0",
     "nestjs-pino": "^4.1.0",
     "pino-http": "^10.3.0",
