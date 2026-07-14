@@ -6,6 +6,8 @@ import {
   useCreateLead,
   useDeleteLead,
   useGenerateEmail,
+  useGenerateFollowUp,
+  useGenerateVariants,
   useImportLeads,
   useLeadAudit,
   useLeadEmails,
@@ -366,14 +368,19 @@ function Badge({ label }: { label: string }) {
 function EmailSection({ lead }: { lead: Lead }) {
   const { data: emails, isLoading } = useLeadEmails(lead.id);
   const generate = useGenerateEmail(lead.id);
+  const followUp = useGenerateFollowUp(lead.id);
+  const variants = useGenerateVariants(lead.id);
   const approve = useApproveLeadEmail(lead.id);
   const reject = useRejectLeadEmail(lead.id);
   const [err, setErr] = useState<string | null>(null);
 
-  const run = async (): Promise<void> => {
+  const hasEmails = Boolean(emails?.length);
+  const busy = generate.isPending || followUp.isPending || variants.isPending;
+
+  const wrap = (fn: () => Promise<unknown>) => async (): Promise<void> => {
     setErr(null);
     try {
-      await generate.mutateAsync();
+      await fn();
     } catch (e) {
       setErr(extractApiError(e));
     }
@@ -383,13 +390,35 @@ function EmailSection({ lead }: { lead: Lead }) {
     <div className="mt-6 border-t border-surface-border pt-4">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold">AI cold email</h3>
-        <button className="btn-primary py-1 text-xs" disabled={generate.isPending} onClick={() => void run()}>
-          {generate.isPending ? 'Generating…' : (emails?.length ? 'Regenerate' : 'Generate email')}
+        <button
+          className="btn-primary py-1 text-xs"
+          disabled={busy}
+          onClick={() => void wrap(() => generate.mutateAsync())()}
+        >
+          {generate.isPending ? 'Generating…' : hasEmails ? 'Regenerate' : 'Generate email'}
         </button>
       </div>
       <p className="mb-3 text-xs text-slate-500">
         Personalized from this lead&apos;s website audit + score.
       </p>
+
+      <div className="mb-3 flex flex-wrap gap-2">
+        <button
+          className="btn-ghost py-1 text-xs"
+          disabled={busy || !hasEmails}
+          title={hasEmails ? '' : 'Generate an initial email first'}
+          onClick={() => void wrap(() => followUp.mutateAsync())()}
+        >
+          {followUp.isPending ? 'Writing…' : '+ Follow-up'}
+        </button>
+        <button
+          className="btn-ghost py-1 text-xs"
+          disabled={busy}
+          onClick={() => void wrap(() => variants.mutateAsync(2))()}
+        >
+          {variants.isPending ? 'Writing…' : 'A/B variants'}
+        </button>
+      </div>
 
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
       {isLoading && <p className="text-sm text-slate-500">Loading…</p>}
@@ -454,11 +483,23 @@ function EmailCard({
         ? 'bg-red-500/20 text-red-300'
         : 'bg-amber-500/20 text-amber-300';
 
+  const kindLabel =
+    email.kind === 'FOLLOWUP'
+      ? `Follow-up #${email.sequenceIndex}`
+      : email.kind === 'VARIANT'
+        ? `Variant ${email.variantLabel ?? ''}`.trim()
+        : 'Initial';
+
   return (
     <div className="rounded-lg border border-surface-border bg-surface p-3">
       <div className="mb-2 flex items-start justify-between gap-2">
         <div>
-          <div className="mb-1 text-xs font-medium text-slate-400">Subject</div>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="rounded bg-brand/20 px-1.5 py-0.5 text-[10px] font-medium text-brand">
+              {kindLabel}
+            </span>
+            <span className="text-xs font-medium text-slate-400">Subject</span>
+          </div>
           <div className="text-sm font-medium text-slate-100">{email.subject}</div>
         </div>
         <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${statusClass}`}>

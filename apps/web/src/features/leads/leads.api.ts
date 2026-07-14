@@ -86,6 +86,9 @@ export async function importLeadsCsv(csv: string): Promise<ImportResult> {
 export interface EmailDraft {
   id: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  kind: 'INITIAL' | 'FOLLOWUP' | 'VARIANT';
+  variantLabel: string | null;
+  sequenceIndex: number;
   subject: string;
   body: string;
   provider: string;
@@ -105,6 +108,16 @@ export async function generateLeadEmail(id: string): Promise<EmailDraft> {
 
 export async function listLeadEmails(id: string): Promise<EmailDraft[]> {
   const { data } = await api.get<EmailDraft[]>(`/leads/${id}/email`);
+  return data;
+}
+
+export async function generateLeadFollowUp(id: string): Promise<EmailDraft> {
+  const { data } = await api.post<EmailDraft>(`/leads/${id}/email/followup`);
+  return data;
+}
+
+export async function generateLeadVariants(id: string, count: number): Promise<EmailDraft[]> {
+  const { data } = await api.post<EmailDraft[]>(`/leads/${id}/email/variants`, { count });
   return data;
 }
 

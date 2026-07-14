@@ -52,6 +52,29 @@ const SYSTEM_PROMPT = [
   '<email body>',
 ].join('\n');
 
+const FOLLOWUP_SYSTEM = [
+  `You are an expert B2B cold-email copywriter for ${SENDER_PROFILE}.`,
+  'Write a SHORT follow-up to a prospect who did not reply to earlier outreach.',
+  'Rules:',
+  '- Ground every claim in the website findings provided. Never invent facts.',
+  '- 40–70 words. Warm, brief, respectful of their time.',
+  '- Add one new angle or piece of value — do not just repeat the first email.',
+  '- One light, specific CTA. No guilt-tripping, no "just following up".',
+  '- No signature or "Best regards" — the sender is appended separately.',
+  'Output EXACTLY in this format and nothing else:',
+  'Subject: <short subject, under 60 chars>',
+  '',
+  '<email body>',
+].join('\n');
+
+// Distinct framings so A/B variants differ meaningfully (not just reworded).
+const VARIANT_ANGLES = [
+  'the site speed / performance-loss angle',
+  'the mobile-experience / lost-mobile-customers angle',
+  'the lead-capture / missing contact-form or CTA conversion angle',
+  'the trust / first-impression / credibility angle',
+];
+
 const SPAM_WORDS = [
   'guarantee',
   'guaranteed',
@@ -146,6 +169,93 @@ export class PersonalizationService {
     }
 
     return results;
+  }
+
+  /** Generate a short follow-up that references prior (unanswered) outreach and
+   * adds one new angle. Follow-ups are intentionally shorter than the opener. */
+  async generateFollowUp(
+    company: Company,
+    contact: Contact | null,
+    audit: WebsiteAudit | null,
+    score: LeadScore | null,
+    previous: Array<{ subject: string; body: string }>,
+    sequenceIndex: number,
+  ): Promise<GeneratedEmail> {
+    const priorText = previous
+      .map((p, i) => `Message ${i + 1}:\nSubject: ${p.subject}\n${p.body}`)
+      .join('\n\n');
+
+    const userPrompt = [
+      this.buildFacts(company, contact, audit, score),
+      '',
+      'Earlier outreach that received NO reply:',
+      priorText || '(none on record)',
+      '',
+      `Write follow-up #${sequenceIndex}. Briefly reference the earlier note, add ONE`,
+      'new angle or piece of value, and keep it very short (40–70 words). Friendly,',
+      'no guilt-tripping, no "just bumping this". End with a light, specific CTA.',
+    ].join('\n');
+
+    const result = await this.ai.generateText(userPrompt, {
+      system: FOLLOWUP_SYSTEM,
+      tier: 'balanced',
+      maxTokens: 400,
+      temperature: 0.75,
+    });
+
+    const { subject, body } = this.parse(result.text);
+    return {
+      subject,
+      body,
+      provider: result.provider,
+      model: result.model,
+      tier: 'balanced',
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      costUsd: result.usage.estimatedCostUsd,
+    };
+  }
+
+  /** Generate `count` distinct opener variants (A/B testing), each taking a
+   * different angle so their prompt fingerprints — and outputs — differ. */
+  async generateVariants(
+    company: Company,
+    contact: Contact | null,
+    audit: WebsiteAudit | null,
+    score: LeadScore | null,
+    count: number,
+  ): Promise<GeneratedEmail[]> {
+    const angles = VARIANT_ANGLES.slice(0, Math.max(1, Math.min(count, VARIANT_ANGLES.length)));
+    const facts = this.buildFacts(company, contact, audit, score);
+
+    const raw = await this.ai.completeMany(
+      angles.map((angle) => ({
+        messages: [
+          {
+            role: 'user' as const,
+            content: `${facts}\n\nAngle for THIS variant: ${angle}. Make it distinctly different in hook and framing from other possible angles.`,
+          },
+        ],
+        system: SYSTEM_PROMPT,
+        tier: 'balanced' as const,
+        maxTokens: 600,
+        temperature: 0.9,
+      })),
+    );
+
+    return raw.map((r) => {
+      const { subject, body } = this.parse(r.text);
+      return {
+        subject,
+        body,
+        provider: r.provider,
+        model: r.model,
+        tier: 'balanced',
+        inputTokens: r.usage.inputTokens,
+        outputTokens: r.usage.outputTokens,
+        costUsd: r.usage.estimatedCostUsd,
+      };
+    });
   }
 
   /** Assemble the grounded, human-readable fact sheet the model writes from. */

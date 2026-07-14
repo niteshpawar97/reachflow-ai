@@ -42,3 +42,8 @@ export const BulkEmailSchema = z.object({
   leadIds: z.array(z.string().uuid()).min(1).max(50),
 });
 export type BulkEmailDto = z.infer<typeof BulkEmailSchema>;
+
+export const VariantsSchema = z.object({
+  count: z.coerce.number().int().min(2).max(4).default(2),
+});
+export type VariantsDto = z.infer<typeof VariantsSchema>;

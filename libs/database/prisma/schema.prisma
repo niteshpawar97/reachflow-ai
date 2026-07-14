@@ -300,6 +300,12 @@ enum EmailDraftStatus {
   REJECTED
 }
 
+enum EmailDraftKind {
+  INITIAL
+  FOLLOWUP
+  VARIANT
+}
+
 enum CampaignStatus {
   DRAFT
   ACTIVE
@@ -374,6 +380,9 @@ model EmailDraft {
   workspaceId  String   @map("workspace_id") @db.Uuid
   leadId       String   @map("lead_id") @db.Uuid
   status       EmailDraftStatus @default(PENDING)
+  kind         EmailDraftKind   @default(INITIAL)
+  variantLabel String?          @map("variant_label")
+  sequenceIndex Int             @default(0) @map("sequence_index")
   subject      String
   body         String   @db.Text
   provider     String

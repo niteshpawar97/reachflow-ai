@@ -90,6 +90,105 @@ export class LeadsService {
     });
   }
 
+  /** Generate a follow-up email referencing prior unanswered drafts (M40). */
+  async generateFollowUp(workspaceId: string, leadId: string) {
+    const lead = await this.prisma.lead.findFirst({
+      where: { id: leadId, workspaceId, deletedAt: null },
+      include: { company: true, contact: true, score: true },
+    });
+    if (!lead) {
+      throw new NotFoundException('Lead not found');
+    }
+
+    const priorDrafts = await this.prisma.emailDraft.findMany({
+      where: { workspaceId, leadId, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (priorDrafts.length === 0) {
+      throw new BadRequestException('Generate an initial email before a follow-up');
+    }
+
+    const audit = await this.prisma.websiteAudit.findFirst({
+      where: { workspaceId, companyId: lead.companyId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const followupCount = priorDrafts.filter((d) => d.kind === 'FOLLOWUP').length;
+    const email = await this.personalization.generateFollowUp(
+      lead.company,
+      lead.contact,
+      audit,
+      lead.score,
+      priorDrafts.map((d) => ({ subject: d.subject, body: d.body })),
+      followupCount + 1,
+    );
+
+    return this.prisma.emailDraft.create({
+      data: {
+        workspaceId,
+        leadId,
+        kind: 'FOLLOWUP',
+        sequenceIndex: followupCount + 1,
+        subject: email.subject,
+        body: email.body,
+        provider: email.provider,
+        model: email.model,
+        tier: email.tier,
+        inputTokens: email.inputTokens,
+        outputTokens: email.outputTokens,
+        costUsd: email.costUsd,
+      },
+    });
+  }
+
+  /** Generate N distinct A/B opener variants for a lead (M41). */
+  async generateVariants(workspaceId: string, leadId: string, count: number) {
+    const lead = await this.prisma.lead.findFirst({
+      where: { id: leadId, workspaceId, deletedAt: null },
+      include: { company: true, contact: true, score: true },
+    });
+    if (!lead) {
+      throw new NotFoundException('Lead not found');
+    }
+
+    const audit = await this.prisma.websiteAudit.findFirst({
+      where: { workspaceId, companyId: lead.companyId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const variants = await this.personalization.generateVariants(
+      lead.company,
+      lead.contact,
+      audit,
+      lead.score,
+      count,
+    );
+
+    const created = [];
+    for (let i = 0; i < variants.length; i += 1) {
+      const v = variants[i]!;
+      created.push(
+        await this.prisma.emailDraft.create({
+          data: {
+            workspaceId,
+            leadId,
+            kind: 'VARIANT',
+            variantLabel: String.fromCharCode(65 + i), // A, B, C…
+            subject: v.subject,
+            body: v.body,
+            provider: v.provider,
+            model: v.model,
+            tier: v.tier,
+            inputTokens: v.inputTokens,
+            outputTokens: v.outputTokens,
+            costUsd: v.costUsd,
+          },
+        }),
+      );
+    }
+    return created;
+  }
+
   async generateEmailBatch(workspaceId: string, leadIds: string[]) {
     const leads = await this.prisma.lead.findMany({
       where: { workspaceId, deletedAt: null, id: { in: leadIds } },

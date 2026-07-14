@@ -5,6 +5,8 @@ import {
   createLead,
   deleteLead,
   generateLeadEmail,
+  generateLeadFollowUp,
+  generateLeadVariants,
   getLeadAudit,
   importLeadsCsv,
   listLeadEmails,
@@ -97,6 +99,22 @@ export function useGenerateEmail(leadId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => generateLeadEmail(leadId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-emails'] }),
+  });
+}
+
+export function useGenerateFollowUp(leadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => generateLeadFollowUp(leadId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-emails'] }),
+  });
+}
+
+export function useGenerateVariants(leadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (count: number) => generateLeadVariants(leadId, count),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-emails'] }),
   });
 }

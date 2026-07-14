@@ -21,10 +21,12 @@ import {
   BulkEmailSchema,
   ListLeadsQuerySchema,
   UpdateLeadSchema,
+  VariantsSchema,
   type CreateLeadDto,
   type BulkEmailDto,
   type ListLeadsQuery,
   type UpdateLeadDto,
+  type VariantsDto,
 } from './dto/lead.dto';
 import { ImportLeadsSchema, type ImportLeadsDto } from './dto/import.dto';
 import { LeadsService } from './leads.service';
@@ -121,6 +123,23 @@ export class LeadsController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<unknown> {
     return this.leads.listEmails(workspaceId, id);
+  }
+
+  @Post(':id/email/followup')
+  generateFollowUp(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<unknown> {
+    return this.leads.generateFollowUp(workspaceId, id);
+  }
+
+  @Post(':id/email/variants')
+  generateVariants(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(VariantsSchema)) dto: VariantsDto,
+  ): Promise<unknown> {
+    return this.leads.generateVariants(workspaceId, id, dto.count);
   }
 
   @Post(':id/email/:emailId/approve')
