@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { extractApiError } from '../lib/api';
-import { useCreateMailbox, useDeleteMailbox, useMailboxes } from '../features/mailboxes/useMailboxes';
+import {
+  useCreateMailbox,
+  useDeleteMailbox,
+  useMailboxes,
+  useTestMailbox,
+} from '../features/mailboxes/useMailboxes';
 import type { Mailbox } from '../features/mailboxes/mailboxes.api';
 
 export function MailboxesPage() {
@@ -42,6 +47,19 @@ export function MailboxesPage() {
 
 function MailboxCard({ mailbox }: { mailbox: Mailbox }) {
   const del = useDeleteMailbox();
+  const test = useTestMailbox();
+  const [note, setNote] = useState<string | null>(null);
+
+  const sendTest = async (): Promise<void> => {
+    setNote(null);
+    try {
+      const r = await test.mutateAsync({ id: mailbox.id });
+      setNote(`✓ Sent (id ${r.messageId.slice(0, 16)}…)`);
+    } catch (e) {
+      setNote(`✕ ${extractApiError(e)}`);
+    }
+  };
+
   const statusClass =
     mailbox.status === 'ACTIVE'
       ? 'bg-green-500/20 text-green-300'
@@ -73,7 +91,16 @@ function MailboxCard({ mailbox }: { mailbox: Mailbox }) {
         </div>
         {mailbox.lastError && <div className="text-red-400">{mailbox.lastError}</div>}
       </dl>
-      <div className="mt-3 flex justify-end">
+      {note && <p className="mt-2 text-xs text-slate-400">{note}</p>}
+
+      <div className="mt-3 flex justify-end gap-2">
+        <button
+          className="btn-ghost py-1 text-xs"
+          disabled={test.isPending}
+          onClick={() => void sendTest()}
+        >
+          {test.isPending ? 'Sending…' : 'Send test'}
+        </button>
         <button
           className="btn-ghost py-1 text-xs text-red-400"
           disabled={del.isPending}

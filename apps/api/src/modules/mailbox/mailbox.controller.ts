@@ -17,17 +17,32 @@ import { WorkspaceId } from '../../common/workspace-context.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CreateMailboxSchema,
+  TestSendSchema,
   UpdateMailboxSchema,
   type CreateMailboxDto,
+  type TestSendDto,
   type UpdateMailboxDto,
 } from './dto/mailbox.dto';
 import { MailboxService } from './mailbox.service';
+import { MailSenderService } from './mail-sender.service';
 
 // Workspace-scoped via the X-Workspace-Id header (resolved by WorkspaceGuard).
 @Controller('mailboxes')
 @UseGuards(JwtAuthGuard, WorkspaceGuard)
 export class MailboxController {
-  constructor(private readonly mailboxes: MailboxService) {}
+  constructor(
+    private readonly mailboxes: MailboxService,
+    private readonly sender: MailSenderService,
+  ) {}
+
+  @Post(':id/test')
+  test(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(TestSendSchema)) dto: TestSendDto,
+  ): Promise<unknown> {
+    return this.sender.sendTest(workspaceId, id, dto.to);
+  }
 
   @Post()
   create(

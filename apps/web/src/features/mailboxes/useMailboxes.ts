@@ -4,6 +4,7 @@ import {
   createMailbox,
   deleteMailbox,
   listMailboxes,
+  testMailbox,
   type CreateMailboxPayload,
 } from './mailboxes.api';
 
@@ -28,6 +29,14 @@ export function useDeleteMailbox() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteMailbox(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mailboxes'] }),
+  });
+}
+
+export function useTestMailbox() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, to }: { id: string; to?: string }) => testMailbox(id, to),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mailboxes'] }),
   });
 }

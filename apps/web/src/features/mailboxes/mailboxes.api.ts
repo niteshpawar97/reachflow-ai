@@ -45,3 +45,14 @@ export async function createMailbox(payload: CreateMailboxPayload): Promise<Mail
 export async function deleteMailbox(id: string): Promise<void> {
   await api.delete(`/mailboxes/${id}`);
 }
+
+export interface SendResult {
+  messageId: string;
+  accepted: string[];
+  rejected: string[];
+}
+
+export async function testMailbox(id: string, to?: string): Promise<SendResult> {
+  const { data } = await api.post<SendResult>(`/mailboxes/${id}/test`, to ? { to } : {});
+  return data;
+}

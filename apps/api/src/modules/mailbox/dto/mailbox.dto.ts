@@ -38,3 +38,8 @@ export const UpdateMailboxSchema = z
   })
   .strict();
 export type UpdateMailboxDto = z.infer<typeof UpdateMailboxSchema>;
+
+export const TestSendSchema = z.object({
+  to: z.string().email().max(200).optional(),
+});
+export type TestSendDto = z.infer<typeof TestSendSchema>;
