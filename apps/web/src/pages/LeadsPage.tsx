@@ -772,7 +772,7 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-raised shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-raised p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between border-b border-surface-border pb-3">
@@ -788,10 +788,10 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
           <button className="btn-ghost py-1" onClick={onClose}>✕</button>
         </div>
 
-        <div className="flex flex-wrap items-end gap-2">
-          <div>
+        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-surface-border bg-surface p-4">
+          <div className="w-48">
             <label className="label">Data source</label>
-            <select className="input w-40" value={source} disabled={search.isPending} onChange={(e) => {
+            <select className="input w-full" value={source} disabled={search.isPending} onChange={(e) => {
               setSource(e.target.value as DiscoverySource);
               setResults([]);
               setSelected(new Set());
@@ -801,18 +801,18 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
               <option value="OSM">OpenStreetMap</option>
             </select>
           </div>
-          <div>
+          <div className="w-48">
             <label className="label">Category</label>
-            <select className="input w-40" value={category} disabled={search.isPending} onChange={(e) => setCategory(e.target.value)}>
+            <select className="input w-full" value={category} disabled={search.isPending} onChange={(e) => setCategory(e.target.value)}>
               {(categories ?? ['bakery']).map((c) => (
                 <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
               ))}
             </select>
           </div>
-          <div className="flex-1">
+          <div className="min-w-56 flex-1">
             <label className="label">City, country</label>
             <input
-              className="input"
+              className="input w-full"
               placeholder="Detecting your city and country…"
               value={location}
               disabled={search.isPending}
@@ -828,7 +828,7 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
               </p>
             )}
           </div>
-          <button className="btn-primary" disabled={search.isPending || location.trim().length < 2} onClick={() => void runSearch()}>
+          <button className="btn-primary h-10 px-5" disabled={search.isPending || location.trim().length < 2} onClick={() => void runSearch()}>
             {search.isPending ? 'Searching…' : 'Search'}
           </button>
         </div>
@@ -875,13 +875,13 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
             <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
               <span>{results.length} found · {selected.size} selected</span>
               <div className="flex gap-2">
-                <button className="hover:underline" onClick={() => setSelected(new Set(results.map((b) => b.osmId)))}>All</button>
-                <button className="hover:underline" onClick={() => setSelected(new Set())}>None</button>
+                <button className="text-brand hover:underline" onClick={() => setSelected(new Set(results.map((b) => b.osmId)))}>Select all</button>
+                <button className="text-slate-400 hover:text-slate-200 hover:underline" onClick={() => setSelected(new Set())}>Clear</button>
               </div>
             </div>
-            <div className="mt-2 flex-1 space-y-1 overflow-y-auto rounded-lg border border-surface-border p-2">
+            <div className="mt-2 flex-1 space-y-2 overflow-y-auto rounded-xl border border-surface-border bg-surface p-2">
               {results.map((b) => (
-                <label key={b.osmId} className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
+                <label key={b.osmId} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition ${selected.has(b.osmId) ? 'border-brand/50 bg-brand/5' : 'border-transparent hover:border-surface-border hover:bg-white/5'}`}>
                   <input type="checkbox" className="mt-1" checked={selected.has(b.osmId)} onChange={() => toggle(b.osmId)} />
                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-slate-100">{b.name}</div>
@@ -906,7 +906,7 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
                 </label>
               ))}
             </div>
-            <button className="btn-primary mt-3" disabled={importBiz.isPending || selected.size === 0} onClick={() => void runImport()}>
+            <button className="btn-primary mt-3 w-full" disabled={importBiz.isPending || selected.size === 0} onClick={() => void runImport()}>
               {importBiz.isPending ? 'Importing…' : `Import ${selected.size} as leads`}
             </button>
           </>
