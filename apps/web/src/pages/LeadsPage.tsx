@@ -714,6 +714,8 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string | null>(null);
   const [imported, setImported] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searchSeconds, setSearchSeconds] = useState(0);
 
   useEffect(() => {
     void detectLocation.mutateAsync().then(
@@ -722,9 +724,22 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
     );
   }, []); // Detect once when the modal opens; manual input always remains available.
 
+  useEffect(() => {
+    if (!search.isPending) {
+      setSearchSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const timer = setInterval(() => setSearchSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [search.isPending]);
+
   const runSearch = async (): Promise<void> => {
     setErr(null);
     setImported(null);
+    setHasSearched(true);
+    setResults([]);
+    setSelected(new Set());
     try {
       const r = await search.mutateAsync({ source, category, location, limit: 25 });
       setResults(r.businesses);
@@ -757,25 +772,38 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-surface-border bg-surface-raised p-5"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-raised shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">Discover businesses (OpenStreetMap)</h2>
+        <div className="mb-3 flex items-center justify-between border-b border-surface-border pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold">Discover businesses</h2>
+              <span className="rounded-full bg-brand/15 px-2 py-0.5 text-xs font-medium text-brand">
+                {source === 'GOOGLE_MAPS' ? 'Google Maps' : 'OpenStreetMap'}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">Search, review, then import only the businesses you want.</p>
+          </div>
           <button className="btn-ghost py-1" onClick={onClose}>✕</button>
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
           <div>
-            <label className="label">Source</label>
-            <select className="input w-40" value={source} onChange={(e) => setSource(e.target.value as DiscoverySource)}>
+            <label className="label">Data source</label>
+            <select className="input w-40" value={source} disabled={search.isPending} onChange={(e) => {
+              setSource(e.target.value as DiscoverySource);
+              setResults([]);
+              setSelected(new Set());
+              setHasSearched(false);
+            }}>
               <option value="GOOGLE_MAPS">Google Maps</option>
               <option value="OSM">OpenStreetMap</option>
             </select>
           </div>
           <div>
             <label className="label">Category</label>
-            <select className="input w-40" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <select className="input w-40" value={category} disabled={search.isPending} onChange={(e) => setCategory(e.target.value)}>
               {(categories ?? ['bakery']).map((c) => (
                 <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
               ))}
@@ -787,6 +815,7 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
               className="input"
               placeholder="Detecting your city and country…"
               value={location}
+              disabled={search.isPending}
               onChange={(e) => setLocation(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void runSearch()}
             />
@@ -799,13 +828,47 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
               </p>
             )}
           </div>
-          <button className="btn-primary" disabled={search.isPending || location.length < 2} onClick={() => void runSearch()}>
+          <button className="btn-primary" disabled={search.isPending || location.trim().length < 2} onClick={() => void runSearch()}>
             {search.isPending ? 'Searching…' : 'Search'}
           </button>
         </div>
 
-        {err && <p className="mt-3 text-sm text-red-400">{err}</p>}
-        {imported && <p className="mt-3 text-sm text-green-300">{imported}</p>}
+        <div className="mt-3 rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs text-slate-400">
+          {source === 'GOOGLE_MAPS'
+            ? 'Google Maps is scraped live without an API key. Searches return up to 25 listings and usually take 30–90 seconds.'
+            : 'OpenStreetMap is a free fallback; coverage and contact details vary by area.'}
+        </div>
+
+        {search.isPending && (
+          <div className="mt-3 rounded-lg border border-brand/30 bg-brand/5 p-3">
+            <div className="flex items-center gap-3">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+              <div>
+                <p className="text-sm font-medium text-slate-100">Searching {source === 'GOOGLE_MAPS' ? 'Google Maps' : 'OpenStreetMap'}…</p>
+                <p className="text-xs text-slate-400">
+                  {source === 'GOOGLE_MAPS'
+                    ? `Loading listings and opening business detail pages (${searchSeconds}s elapsed).`
+                    : `Finding businesses near ${location} (${searchSeconds}s elapsed).`}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {err && (
+          <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+            <p className="font-medium">Search failed</p>
+            <p className="mt-1 text-xs">{err}</p>
+            {source === 'GOOGLE_MAPS' && <p className="mt-2 text-xs">Try again after a minute, or use OpenStreetMap as a fallback.</p>}
+          </div>
+        )}
+        {imported && <p className="mt-3 rounded-lg bg-green-500/10 p-3 text-sm text-green-300">{imported}</p>}
+        {hasSearched && !search.isPending && !err && results.length === 0 && (
+          <div className="mt-3 rounded-lg border border-surface-border bg-surface p-6 text-center">
+            <p className="font-medium text-slate-200">No businesses found</p>
+            <p className="mt-1 text-sm text-slate-500">Try a broader category, another city, or the other source.</p>
+          </div>
+        )}
 
         {results.length > 0 && (
           <>

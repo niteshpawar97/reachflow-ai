@@ -114,7 +114,18 @@ export class GoogleMapsDiscoveryService {
     const rawPhone = (await attr('[data-item-id^="phone:"]', 'aria-label')) ?? (await text('[data-item-id^="phone:"]'));
     const ratingLabel = await attr('span[role="img"]', 'aria-label');
     const ratingMatch = ratingLabel?.match(/([0-5](?:\.\d)?)/);
-    const reviewsMatch = ratingLabel?.match(/([\d,]+)\s+reviews?/i);
+    let reviewLabel = ratingLabel;
+    const reviewButtons = page.locator('button[aria-label*="review" i]');
+    if (await reviewButtons.count()) {
+      reviewLabel = await reviewButtons.first().getAttribute('aria-label');
+    }
+    const reviewsMatch = reviewLabel?.match(/([\d,]+)\s+reviews?/i);
+    const reviewText = reviewsMatch
+      ? reviewsMatch[1]
+      : (await page.locator('span').allTextContents())
+          .map((value) => value.trim())
+          .find((value) => /^\([\d,]+\)$/.test(value))
+          ?.replace(/[()]/g, '');
     const data = {
       name: await text('h1'),
       address: rawAddress?.replace(/^Address:\s*/i, '') ?? null,
@@ -140,7 +151,7 @@ export class GoogleMapsDiscoveryService {
       hasWebsite: Boolean(data.website),
       mapsUrl,
       rating: ratingMatch ? Number(ratingMatch[1]) : null,
-      reviewCount: reviewsMatch?.[1] ? Number(reviewsMatch[1].replace(/,/g, '')) : null,
+      reviewCount: reviewText ? Number(reviewText.replace(/,/g, '')) : null,
     };
   }
 
