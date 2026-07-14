@@ -11,6 +11,7 @@ import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { AuthModule } from './modules/auth/auth.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { DiscoveryModule } from './modules/discovery/discovery.module';
 import { HealthModule } from './modules/health/health.module';
 import { LeadsModule } from './modules/leads/leads.module';
 import { MailboxModule } from './modules/mailbox/mailbox.module';
@@ -51,6 +52,7 @@ import { WorkspaceModule } from './modules/workspace/workspace.module';
     AuthModule,
     CampaignsModule,
     DashboardModule,
+    DiscoveryModule,
     LeadsModule,
     MailboxModule,
     TrackingModule,

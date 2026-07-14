@@ -1,5 +1,11 @@
 import { useState, type ReactNode } from 'react';
 import { extractApiError } from '../lib/api';
+import {
+  useDiscoveryCategories,
+  useImportBusinesses,
+  useSearchBusinesses,
+} from '../features/discovery/useDiscovery';
+import type { DiscoveredBusiness } from '../features/discovery/discovery.api';
 import type { EmailDraft, ImportResult, Lead, LeadStatus } from '../features/leads/leads.api';
 import {
   useApproveLeadEmail,
@@ -46,6 +52,7 @@ export function LeadsPage() {
   const [status, setStatus] = useState<LeadStatus | ''>('');
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showDiscover, setShowDiscover] = useState(false);
   const [selected, setSelected] = useState<Lead | null>(null);
 
   const { data, isLoading, isError, error } = useLeads({
@@ -62,6 +69,9 @@ export function LeadsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Leads</h1>
         <div className="flex gap-2">
+          <button className="btn-ghost" onClick={() => setShowDiscover(true)}>
+            🔍 Discover
+          </button>
           <button className="btn-ghost" onClick={() => setShowImport(true)}>
             Import CSV
           </button>
@@ -185,6 +195,7 @@ export function LeadsPage() {
       )}
       {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} />}
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      {showDiscover && <DiscoverModal onClose={() => setShowDiscover(false)} />}
     </div>
   );
 }
@@ -687,6 +698,122 @@ function ImportModal({ onClose }: { onClose: () => void }) {
         {importLeads.isPending ? 'Importing…' : 'Import'}
       </button>
     </Modal>
+  );
+}
+
+function DiscoverModal({ onClose }: { onClose: () => void }) {
+  const { data: categories } = useDiscoveryCategories();
+  const search = useSearchBusinesses();
+  const importBiz = useImportBusinesses();
+  const [category, setCategory] = useState('bakery');
+  const [location, setLocation] = useState('');
+  const [results, setResults] = useState<DiscoveredBusiness[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [err, setErr] = useState<string | null>(null);
+  const [imported, setImported] = useState<string | null>(null);
+
+  const runSearch = async (): Promise<void> => {
+    setErr(null);
+    setImported(null);
+    try {
+      const r = await search.mutateAsync({ category, location, limit: 40 });
+      setResults(r.businesses);
+      setSelected(new Set(r.businesses.map((b) => b.osmId)));
+    } catch (e) {
+      setErr(extractApiError(e));
+    }
+  };
+
+  const toggle = (osmId: string): void =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(osmId)) next.delete(osmId);
+      else next.add(osmId);
+      return next;
+    });
+
+  const runImport = async (): Promise<void> => {
+    setErr(null);
+    const chosen = results.filter((b) => selected.has(b.osmId));
+    if (chosen.length === 0) return;
+    try {
+      const r = await importBiz.mutateAsync(chosen);
+      setImported(`Imported ${r.imported} · ${r.duplicates} already existed`);
+    } catch (e) {
+      setErr(extractApiError(e));
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-surface-border bg-surface-raised p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-semibold">Discover businesses (OpenStreetMap)</h2>
+          <button className="btn-ghost py-1" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2">
+          <div>
+            <label className="label">Category</label>
+            <select className="input w-40" value={category} onChange={(e) => setCategory(e.target.value)}>
+              {(categories ?? ['bakery']).map((c) => (
+                <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="label">Location (city, country)</label>
+            <input
+              className="input"
+              placeholder="Brighton, UK"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void runSearch()}
+            />
+          </div>
+          <button className="btn-primary" disabled={search.isPending || location.length < 2} onClick={() => void runSearch()}>
+            {search.isPending ? 'Searching…' : 'Search'}
+          </button>
+        </div>
+
+        {err && <p className="mt-3 text-sm text-red-400">{err}</p>}
+        {imported && <p className="mt-3 text-sm text-green-300">{imported}</p>}
+
+        {results.length > 0 && (
+          <>
+            <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+              <span>{results.length} found · {selected.size} selected</span>
+              <div className="flex gap-2">
+                <button className="hover:underline" onClick={() => setSelected(new Set(results.map((b) => b.osmId)))}>All</button>
+                <button className="hover:underline" onClick={() => setSelected(new Set())}>None</button>
+              </div>
+            </div>
+            <div className="mt-2 flex-1 space-y-1 overflow-y-auto rounded-lg border border-surface-border p-2">
+              {results.map((b) => (
+                <label key={b.osmId} className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
+                  <input type="checkbox" className="mt-1" checked={selected.has(b.osmId)} onChange={() => toggle(b.osmId)} />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-slate-100">{b.name}</div>
+                    <div className="truncate text-xs text-slate-500">
+                      {b.website ?? 'no website'}{b.address ? ` · ${b.address}` : ''}{b.phone ? ` · ${b.phone}` : ''}
+                    </div>
+                  </div>
+                  {!b.hasWebsite && (
+                    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">needs site</span>
+                  )}
+                </label>
+              ))}
+            </div>
+            <button className="btn-primary mt-3" disabled={importBiz.isPending || selected.size === 0} onClick={() => void runImport()}>
+              {importBiz.isPending ? 'Importing…' : `Import ${selected.size} as leads`}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
