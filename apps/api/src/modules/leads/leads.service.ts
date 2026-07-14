@@ -7,17 +7,65 @@ import {
 import { parse } from 'csv-parse/sync';
 import { Prisma, PrismaService } from '@reachflow/database';
 import { WebsiteAnalyzerService } from '../website-analyzer/website-analyzer.service';
+import { LeadScoringService } from '../lead-scoring/lead-scoring.service';
 import { CreateLeadSchema, type CreateLeadDto, type ListLeadsQuery, type UpdateLeadDto } from './dto/lead.dto';
 import { DEFAULT_MAPPING, type ImportResult } from './dto/import.dto';
 
-const LEAD_INCLUDE = { company: true, contact: true } satisfies Prisma.LeadInclude;
+const LEAD_INCLUDE = {
+  company: true,
+  contact: true,
+  score: true,
+} satisfies Prisma.LeadInclude;
 
 @Injectable()
 export class LeadsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly analyzer: WebsiteAnalyzerService,
+    private readonly scoring: LeadScoringService,
   ) {}
+
+  /** Compute + persist a deterministic 0-100 score for the lead (M37). */
+  async scoreLead(workspaceId: string, leadId: string) {
+    const lead = await this.prisma.lead.findFirst({
+      where: { id: leadId, workspaceId, deletedAt: null },
+      include: { company: true, contact: true },
+    });
+    if (!lead) {
+      throw new NotFoundException('Lead not found');
+    }
+    const audit = await this.prisma.websiteAudit.findFirst({
+      where: { workspaceId, companyId: lead.companyId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const result = this.scoring.score(lead.company, lead.contact, audit);
+
+    return this.prisma.leadScore.upsert({
+      where: { leadId },
+      create: {
+        workspaceId,
+        leadId,
+        score: result.score,
+        fitScore: result.fitScore,
+        intentScore: result.intentScore,
+        confidence: result.confidence,
+        factors: result.factors as unknown as Prisma.InputJsonValue,
+      },
+      update: {
+        score: result.score,
+        fitScore: result.fitScore,
+        intentScore: result.intentScore,
+        confidence: result.confidence,
+        factors: result.factors as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  async getScore(workspaceId: string, leadId: string) {
+    await this.get(workspaceId, leadId);
+    return this.prisma.leadScore.findUnique({ where: { leadId } });
+  }
 
   /** Run a website audit for the lead's company and persist it (M34). */
   async auditLead(workspaceId: string, leadId: string) {

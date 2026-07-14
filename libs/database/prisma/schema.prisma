@@ -79,6 +79,7 @@ model Workspace {
   contacts      Contact[]
   leads         Lead[]
   websiteAudits WebsiteAudit[]
+  leadScores    LeadScore[]
 
   @@index([ownerUserId])
   @@index([deletedAt])
@@ -226,14 +227,36 @@ model Lead {
   updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt   DateTime?  @map("deleted_at") @db.Timestamptz(6)
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  contact   Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contact   Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  score     LeadScore?
 
   @@unique([workspaceId, source, sourceKey])
   @@index([workspaceId, status])
   @@index([workspaceId, deletedAt])
   @@map("leads")
+}
+
+// Deterministic 0-100 lead score (M37). fit = ICP match, intent = opportunity
+// (a worse website = more to sell). One current score per lead (upserted).
+model LeadScore {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  leadId      String   @unique @map("lead_id") @db.Uuid
+  score       Int
+  fitScore    Int      @map("fit_score")
+  intentScore Int      @map("intent_score")
+  confidence  Int
+  factors     Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, score])
+  @@map("lead_scores")
 }
 
 enum AuditStatus {

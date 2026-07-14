@@ -81,6 +81,22 @@ export class LeadsController {
     return this.leads.getLatestAudit(workspaceId, id);
   }
 
+  @Post(':id/score')
+  score(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<unknown> {
+    return this.leads.scoreLead(workspaceId, id);
+  }
+
+  @Get(':id/score')
+  getScore(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<unknown> {
+    return this.leads.getScore(workspaceId, id);
+  }
+
   @Patch(':id')
   update(
     @WorkspaceId() workspaceId: string,
