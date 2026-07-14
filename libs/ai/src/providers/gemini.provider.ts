@@ -40,7 +40,10 @@ export class GeminiProvider implements AiProvider {
       config: {
         ...(request.system ? { systemInstruction: request.system } : {}),
         ...(request.temperature != null ? { temperature: request.temperature } : {}),
-        ...(request.maxTokens != null ? { maxOutputTokens: request.maxTokens } : {}),
+        maxOutputTokens: request.maxTokens ?? 1024,
+        // -1 = dynamic thinking; 0 = off. Off by default so thinking tokens
+        // don't consume the answer budget (Gemini 3.x flash gotcha).
+        thinkingConfig: { thinkingBudget: request.thinking ? -1 : 0 },
       },
     });
 

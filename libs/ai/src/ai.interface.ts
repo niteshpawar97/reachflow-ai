@@ -27,6 +27,12 @@ export interface AiCompletionRequest {
   maxTokens?: number;
   /** 0 = deterministic, ~1 = creative. Defaults per call site. */
   temperature?: number;
+  /**
+   * Let the model reason internally before answering. Off by default — cheaper,
+   * faster, and it stops "thinking" tokens from eating the output budget (a real
+   * gotcha on Gemini 3.x flash). Turn on for genuinely hard tasks (proposals).
+   */
+  thinking?: boolean;
   /** Force a specific vendor model id, bypassing tier mapping (advanced). */
   model?: string;
 }

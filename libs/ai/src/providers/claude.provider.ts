@@ -33,7 +33,13 @@ export class ClaudeProvider implements AiProvider {
       model,
       max_tokens: request.maxTokens ?? 1024,
       ...(request.system ? { system: request.system } : {}),
-      ...(request.temperature != null ? { temperature: request.temperature } : {}),
+      // Adaptive thinking (current API for Opus 4.x / Sonnet 5 — budget_tokens
+      // is rejected). Thinking + temperature can't be combined, so drop temp.
+      ...(request.thinking
+        ? { thinking: { type: 'adaptive' as const } }
+        : request.temperature != null
+          ? { temperature: request.temperature }
+          : {}),
       messages: request.messages.map((m) => ({ role: m.role, content: m.content })),
     });
 

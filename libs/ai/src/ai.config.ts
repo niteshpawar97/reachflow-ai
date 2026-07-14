@@ -15,10 +15,13 @@ export interface AiConfig {
 }
 
 // Sensible defaults per vendor. Override any of these via env if needed.
+// Gemini uses the `-latest` stable aliases (never retire). Free AI Studio tier
+// serves flash on all tiers; `gemini-pro-latest` needs paid quota (429s on
+// free) — bump GEMINI_MODEL_DEEP to it once you have quota.
 const GEMINI_DEFAULTS: Record<AiTier, string> = {
-  fast: 'gemini-2.5-flash',
-  balanced: 'gemini-2.5-flash',
-  deep: 'gemini-2.5-pro',
+  fast: 'gemini-flash-latest',
+  balanced: 'gemini-flash-latest',
+  deep: 'gemini-flash-latest',
 };
 
 const CLAUDE_DEFAULTS: Record<AiTier, string> = {
@@ -67,6 +70,8 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
   'claude-sonnet-5': { input: 3, output: 15 },
   'gemini-2.5-pro': { input: 1.25, output: 10 },
   'gemini-2.5-flash': { input: 0.3, output: 2.5 },
+  'gemini-pro-latest': { input: 1.25, output: 10 },
+  'gemini-flash-latest': { input: 0.3, output: 2.5 },
 };
 
 export function estimateCostUsd(model: string, inputTokens: number, outputTokens: number): number {
