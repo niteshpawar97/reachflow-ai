@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  detectLocation,
   getDiscoveryCategories,
   importBusinesses,
   searchBusinesses,
+  type DiscoverySource,
   type DiscoveredBusiness,
 } from './discovery.api';
 
@@ -16,9 +18,22 @@ export function useDiscoveryCategories() {
 
 export function useSearchBusinesses() {
   return useMutation({
-    mutationFn: ({ category, location, limit }: { category: string; location: string; limit?: number }) =>
-      searchBusinesses(category, location, limit),
+    mutationFn: ({
+      source,
+      category,
+      location,
+      limit,
+    }: {
+      source: DiscoverySource;
+      category: string;
+      location: string;
+      limit?: number;
+    }) => searchBusinesses(category, location, source, limit),
   });
+}
+
+export function useDetectLocation() {
+  return useMutation({ mutationFn: detectLocation });
 }
 
 export function useImportBusinesses() {

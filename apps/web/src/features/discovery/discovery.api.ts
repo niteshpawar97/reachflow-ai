@@ -11,6 +11,9 @@ export interface DiscoveredBusiness {
   lat: number | null;
   lon: number | null;
   hasWebsite: boolean;
+  mapsUrl?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
 }
 
 export interface DiscoveryResult {
@@ -20,10 +23,19 @@ export interface DiscoveryResult {
   businesses: DiscoveredBusiness[];
 }
 
+export type DiscoverySource = 'GOOGLE_MAPS' | 'OSM';
+
 export interface ImportResult {
   total: number;
   imported: number;
   duplicates: number;
+}
+
+export interface DetectedLocation {
+  city: string;
+  country: string;
+  countryCode: string | null;
+  location: string;
 }
 
 export async function getDiscoveryCategories(): Promise<string[]> {
@@ -31,12 +43,18 @@ export async function getDiscoveryCategories(): Promise<string[]> {
   return data.categories;
 }
 
+export async function detectLocation(): Promise<DetectedLocation> {
+  const { data } = await api.get<DetectedLocation>('/discovery/detect-location');
+  return data;
+}
+
 export async function searchBusinesses(
   category: string,
   location: string,
+  source: DiscoverySource = 'GOOGLE_MAPS',
   limit = 40,
 ): Promise<DiscoveryResult> {
-  const { data } = await api.post<DiscoveryResult>('/discovery/search', { category, location, limit });
+  const { data } = await api.post<DiscoveryResult>('/discovery/search', { source, category, location, limit });
   return data;
 }
 

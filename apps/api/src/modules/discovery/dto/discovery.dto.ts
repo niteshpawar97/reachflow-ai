@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const DiscoverySearchSchema = z.object({
+  source: z.enum(['GOOGLE_MAPS', 'OSM']).default('GOOGLE_MAPS'),
   category: z.string().min(1).max(50),
   location: z.string().min(2).max(160),
   limit: z.coerce.number().int().min(1).max(60).default(40),
@@ -18,6 +19,9 @@ const BusinessSchema = z.object({
   lat: z.number().nullable().optional(),
   lon: z.number().nullable().optional(),
   hasWebsite: z.boolean().optional(),
+  mapsUrl: z.string().max(1000).nullable().optional(),
+  rating: z.number().min(0).max(5).nullable().optional(),
+  reviewCount: z.number().int().min(0).nullable().optional(),
 });
 
 export const DiscoveryImportSchema = z.object({

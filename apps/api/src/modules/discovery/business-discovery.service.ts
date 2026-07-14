@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma, PrismaService } from '@reachflow/database';
 
 export interface DiscoveredBusiness {
@@ -12,6 +12,9 @@ export interface DiscoveredBusiness {
   lat: number | null;
   lon: number | null;
   hasWebsite: boolean;
+  mapsUrl?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
 }
 
 export interface DiscoveryResult {
@@ -21,9 +24,17 @@ export interface DiscoveryResult {
   businesses: DiscoveredBusiness[];
 }
 
+export interface DetectedLocation {
+  city: string;
+  country: string;
+  countryCode: string | null;
+  location: string;
+}
+
 const UA = 'ReachFlowBot/1.0 (lead discovery; contact: hello@reachflow.ai)';
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
+const IP_GEO = 'http://ip-api.com/json/';
 
 // Friendly category -> OSM key=value selectors.
 const CATEGORY_TAGS: Record<string, string[]> = {
@@ -53,8 +64,6 @@ export const DISCOVERY_CATEGORIES = Object.keys(CATEGORY_TAGS);
 
 @Injectable()
 export class BusinessDiscoveryService {
-  private readonly logger = new Logger(BusinessDiscoveryService.name);
-
   constructor(private readonly prisma: PrismaService) {}
 
   /** Turn selected discovered businesses into leads (source=DIRECTORY),
@@ -86,7 +95,15 @@ export class BusinessDiscoveryService {
           website: b.website,
           domain,
           city: b.address,
-          raw: { phone: b.phone, address: b.address, osmId: b.osmId, source: 'osm' } as Prisma.InputJsonValue,
+          raw: {
+            phone: b.phone,
+            address: b.address,
+            sourceKey: b.osmId,
+            source: b.osmId.startsWith('google:') ? 'google_maps' : 'osm',
+            mapsUrl: b.mapsUrl ?? null,
+            rating: b.rating ?? null,
+            reviewCount: b.reviewCount ?? null,
+          } as Prisma.InputJsonValue,
         },
       });
 
@@ -153,11 +170,34 @@ export class BusinessDiscoveryService {
         lat: el.lat ?? el.center?.lat ?? null,
         lon: el.lon ?? el.center?.lon ?? null,
         hasWebsite: Boolean(website),
+        mapsUrl: null,
+        rating: null,
+        reviewCount: null,
       });
       if (businesses.length >= limit) break;
     }
 
     return { location, category, count: businesses.length, businesses };
+  }
+
+  /**
+   * Resolve the API host's public IP to a friendly city/country. During local
+   * development the API and browser run on the user's machine, so this gives
+   * the user a useful search default without exposing an HTTP-only geo API to
+   * the browser (which HTTPS pages would block as mixed content).
+   */
+  async detectLocation(): Promise<DetectedLocation> {
+    const result = await this.getJson(IP_GEO);
+    if (result?.status !== 'success' || !result.city || !result.country) {
+      throw new BadRequestException('Could not detect your location. Please enter it manually.');
+    }
+
+    return {
+      city: result.city,
+      country: result.country,
+      countryCode: result.countryCode ?? null,
+      location: `${result.city}, ${result.country}`,
+    };
   }
 
   /** Nominatim geocode -> Overpass bbox (south, west, north, east). */

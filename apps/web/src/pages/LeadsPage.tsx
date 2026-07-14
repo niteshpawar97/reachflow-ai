@@ -1,11 +1,12 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { extractApiError } from '../lib/api';
 import {
   useDiscoveryCategories,
+  useDetectLocation,
   useImportBusinesses,
   useSearchBusinesses,
 } from '../features/discovery/useDiscovery';
-import type { DiscoveredBusiness } from '../features/discovery/discovery.api';
+import type { DiscoveredBusiness, DiscoverySource } from '../features/discovery/discovery.api';
 import type { EmailDraft, ImportResult, Lead, LeadStatus } from '../features/leads/leads.api';
 import {
   useApproveLeadEmail,
@@ -703,8 +704,10 @@ function ImportModal({ onClose }: { onClose: () => void }) {
 
 function DiscoverModal({ onClose }: { onClose: () => void }) {
   const { data: categories } = useDiscoveryCategories();
+  const detectLocation = useDetectLocation();
   const search = useSearchBusinesses();
   const importBiz = useImportBusinesses();
+  const [source, setSource] = useState<DiscoverySource>('GOOGLE_MAPS');
   const [category, setCategory] = useState('bakery');
   const [location, setLocation] = useState('');
   const [results, setResults] = useState<DiscoveredBusiness[]>([]);
@@ -712,11 +715,18 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const [imported, setImported] = useState<string | null>(null);
 
+  useEffect(() => {
+    void detectLocation.mutateAsync().then(
+      (detected) => setLocation((current) => current || detected.location),
+      () => undefined,
+    );
+  }, []); // Detect once when the modal opens; manual input always remains available.
+
   const runSearch = async (): Promise<void> => {
     setErr(null);
     setImported(null);
     try {
-      const r = await search.mutateAsync({ category, location, limit: 40 });
+      const r = await search.mutateAsync({ source, category, location, limit: 25 });
       setResults(r.businesses);
       setSelected(new Set(r.businesses.map((b) => b.osmId)));
     } catch (e) {
@@ -757,6 +767,13 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
 
         <div className="flex flex-wrap items-end gap-2">
           <div>
+            <label className="label">Source</label>
+            <select className="input w-40" value={source} onChange={(e) => setSource(e.target.value as DiscoverySource)}>
+              <option value="GOOGLE_MAPS">Google Maps</option>
+              <option value="OSM">OpenStreetMap</option>
+            </select>
+          </div>
+          <div>
             <label className="label">Category</label>
             <select className="input w-40" value={category} onChange={(e) => setCategory(e.target.value)}>
               {(categories ?? ['bakery']).map((c) => (
@@ -765,14 +782,22 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
             </select>
           </div>
           <div className="flex-1">
-            <label className="label">Location (city, country)</label>
+            <label className="label">City, country</label>
             <input
               className="input"
-              placeholder="Brighton, UK"
+              placeholder="Detecting your city and country…"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void runSearch()}
             />
+            {detectLocation.isPending && (
+              <p className="mt-1 text-xs text-slate-500">Detecting city and country…</p>
+            )}
+            {detectLocation.data && (
+              <p className="mt-1 text-xs text-slate-500">
+                Detected: {detectLocation.data.city}, {detectLocation.data.country}
+              </p>
+            )}
           </div>
           <button className="btn-primary" disabled={search.isPending || location.length < 2} onClick={() => void runSearch()}>
             {search.isPending ? 'Searching…' : 'Search'}
@@ -797,6 +822,17 @@ function DiscoverModal({ onClose }: { onClose: () => void }) {
                   <input type="checkbox" className="mt-1" checked={selected.has(b.osmId)} onChange={() => toggle(b.osmId)} />
                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-slate-100">{b.name}</div>
+                    {b.rating != null && (
+                      <div className="text-xs text-amber-300">
+                        ★ {b.rating}
+                        {b.reviewCount != null ? ` (${b.reviewCount.toLocaleString()} reviews)` : ''}
+                        {b.mapsUrl && (
+                          <a className="ml-2 text-brand hover:underline" href={b.mapsUrl} target="_blank" rel="noreferrer">
+                            Open Maps
+                          </a>
+                        )}
+                      </div>
+                    )}
                     <div className="truncate text-xs text-slate-500">
                       {b.website ?? 'no website'}{b.address ? ` · ${b.address}` : ''}{b.phone ? ` · ${b.phone}` : ''}
                     </div>

@@ -14,15 +14,24 @@ import {
   DISCOVERY_CATEGORIES,
   type DiscoveredBusiness,
 } from './business-discovery.service';
+import { GoogleMapsDiscoveryService } from './google-maps-discovery.service';
 
 @Controller('discovery')
 @UseGuards(JwtAuthGuard, WorkspaceGuard)
 export class DiscoveryController {
-  constructor(private readonly discovery: BusinessDiscoveryService) {}
+  constructor(
+    private readonly discovery: BusinessDiscoveryService,
+    private readonly googleMaps: GoogleMapsDiscoveryService,
+  ) {}
 
   @Get('categories')
   categories(): { categories: string[] } {
     return { categories: DISCOVERY_CATEGORIES };
+  }
+
+  @Get('detect-location')
+  detectLocation() {
+    return this.discovery.detectLocation();
   }
 
   @Post('search')
@@ -30,7 +39,9 @@ export class DiscoveryController {
     @WorkspaceId() _workspaceId: string,
     @Body(new ZodValidationPipe(DiscoverySearchSchema)) dto: DiscoverySearchDto,
   ): Promise<unknown> {
-    return this.discovery.discover(dto.category, dto.location, dto.limit);
+    return dto.source === 'GOOGLE_MAPS'
+      ? this.googleMaps.discover(dto.category, dto.location, dto.limit)
+      : this.discovery.discover(dto.category, dto.location, dto.limit);
   }
 
   @Post('import')

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { CampaignLeadStatus, CampaignStatus, PrismaService } from '@reachflow/database';
+import { CampaignLeadStatus, CampaignStatus, Prisma, PrismaService } from '@reachflow/database';
 import { MailSenderService } from '../mailbox/mail-sender.service';
 import { PersonalizationService } from '../personalization/personalization.service';
 import { injectTracking, textToHtml, trackingBaseUrl } from './tracking-inject';
@@ -12,6 +12,13 @@ export interface ProcessResult {
   skipped: number;
   errors: Array<{ campaignLeadId: string; message: string }>;
 }
+
+type DueCampaignLead = Prisma.CampaignLeadGetPayload<{
+  include: {
+    campaign: { include: { steps: true } };
+    lead: { include: { company: true; contact: true; score: true } };
+  };
+}>;
 
 /**
  * Sends due campaign emails INLINE (no queue) so campaigns work without Redis.
@@ -67,7 +74,7 @@ export class CampaignSenderService {
   }
 
   private async sendCampaignLead(
-    row: Awaited<ReturnType<CampaignSenderService['loadDueType']>>,
+    row: DueCampaignLead,
   ): Promise<'sent' | 'skipped'> {
     const steps = [...row.campaign.steps].sort((a, b) => a.position - b.position);
     const step = steps[row.currentStep];
@@ -134,7 +141,7 @@ export class CampaignSenderService {
   }
 
   private async renderStep(
-    row: Awaited<ReturnType<CampaignSenderService['loadDueType']>>,
+    row: DueCampaignLead,
     step: { mode: string; subject: string | null; body: string | null },
   ): Promise<{ subject: string; body: string }> {
     if (step.mode === 'FIXED') {
@@ -182,15 +189,5 @@ export class CampaignSenderService {
       }
     }
     throw new Error('Campaign has no mailbox configured in its mailbox pool');
-  }
-
-  // Type helper: the shape returned by the due-leads query above.
-  private loadDueType() {
-    return this.prisma.campaignLead.findFirstOrThrow({
-      include: {
-        campaign: { include: { steps: true } },
-        lead: { include: { company: true, contact: true, score: true } },
-      },
-    });
   }
 }
