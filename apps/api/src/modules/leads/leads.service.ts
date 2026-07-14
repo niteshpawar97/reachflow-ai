@@ -1,6 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { parse } from 'csv-parse/sync';
 import { Prisma, PrismaService } from '@reachflow/database';
-import type { CreateLeadDto, ListLeadsQuery, UpdateLeadDto } from './dto/lead.dto';
+import { CreateLeadSchema, type CreateLeadDto, type ListLeadsQuery, type UpdateLeadDto } from './dto/lead.dto';
+import { DEFAULT_MAPPING, type ImportResult } from './dto/import.dto';
 
 const LEAD_INCLUDE = { company: true, contact: true } satisfies Prisma.LeadInclude;
 
@@ -64,6 +66,96 @@ export class LeadsService {
         throw e;
       }
     });
+  }
+
+  /** Parse a CSV, validate each row, create leads (source=IMPORT). Synchronous
+   * for now — a queued/batched version arrives with BullMQ (M10). */
+  async importCsv(
+    workspaceId: string,
+    csv: string,
+    mapping?: Record<string, string>,
+  ): Promise<ImportResult> {
+    const map = { ...DEFAULT_MAPPING, ...(mapping ?? {}) };
+    let records: Array<Record<string, string>>;
+    try {
+      records = parse(csv, {
+        columns: (header: string[]) => header.map((h) => h.trim().toLowerCase()),
+        skip_empty_lines: true,
+        trim: true,
+        relax_column_count: true,
+      }) as Array<Record<string, string>>;
+    } catch (e) {
+      throw new ConflictException(
+        `Could not parse CSV: ${e instanceof Error ? e.message : 'invalid format'}`,
+      );
+    }
+
+    const result: ImportResult = {
+      total: records.length,
+      imported: 0,
+      failed: 0,
+      duplicates: 0,
+      errors: [],
+    };
+
+    let rowNum = 1; // header is row 0
+    for (const record of records) {
+      rowNum += 1;
+      const pick = (field: string): string | undefined => {
+        const col = map[field]?.toLowerCase();
+        const val = col ? record[col] : undefined;
+        return val && val.length > 0 ? val : undefined;
+      };
+
+      const candidate = {
+        company: {
+          name: pick('companyName') ?? pick('domain') ?? pick('website'),
+          website: pick('website'),
+          domain: pick('domain'),
+          industry: pick('industry'),
+          country: pick('country'),
+          city: pick('city'),
+        },
+        contact:
+          pick('contactName') || pick('contactEmail') || pick('title')
+            ? {
+                name: pick('contactName'),
+                email: pick('contactEmail'),
+                title: pick('title'),
+              }
+            : undefined,
+        source: 'IMPORT' as const,
+        sourceKey: pick('contactEmail') ?? pick('domain') ?? pick('website'),
+      };
+
+      const parsed = CreateLeadSchema.safeParse(candidate);
+      if (!parsed.success) {
+        result.failed += 1;
+        const first = parsed.error.issues[0];
+        result.errors.push({
+          row: rowNum,
+          message: first ? `${first.path.join('.')}: ${first.message}` : 'invalid row',
+        });
+        continue;
+      }
+
+      try {
+        await this.create(workspaceId, parsed.data);
+        result.imported += 1;
+      } catch (e) {
+        if (e instanceof ConflictException) {
+          result.duplicates += 1;
+        } else {
+          result.failed += 1;
+          result.errors.push({
+            row: rowNum,
+            message: e instanceof Error ? e.message : 'failed to create',
+          });
+        }
+      }
+    }
+
+    return result;
   }
 
   async list(workspaceId: string, query: ListLeadsQuery) {

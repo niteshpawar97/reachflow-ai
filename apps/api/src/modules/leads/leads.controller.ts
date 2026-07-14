@@ -24,6 +24,7 @@ import {
   type ListLeadsQuery,
   type UpdateLeadDto,
 } from './dto/lead.dto';
+import { ImportLeadsSchema, type ImportLeadsDto } from './dto/import.dto';
 import { LeadsService } from './leads.service';
 
 // Workspace-scoped via the X-Workspace-Id header (resolved by WorkspaceGuard).
@@ -38,6 +39,14 @@ export class LeadsController {
     @Body(new ZodValidationPipe(CreateLeadSchema)) dto: CreateLeadDto,
   ): Promise<unknown> {
     return this.leads.create(workspaceId, dto);
+  }
+
+  @Post('import')
+  import(
+    @WorkspaceId() workspaceId: string,
+    @Body(new ZodValidationPipe(ImportLeadsSchema)) dto: ImportLeadsDto,
+  ): Promise<unknown> {
+    return this.leads.importCsv(workspaceId, dto.csv, dto.mapping);
   }
 
   @Get()
