@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { extractApiError } from '../lib/api';
 import {
+  useCheckDomainAuth,
   useCreateMailbox,
   useDeleteMailbox,
   useMailboxes,
+  useReactivateMailbox,
   useTestMailbox,
+  useUpdateMailbox,
 } from '../features/mailboxes/useMailboxes';
-import type { Mailbox } from '../features/mailboxes/mailboxes.api';
+import type { DomainAuthReport, Mailbox } from '../features/mailboxes/mailboxes.api';
 
 export function MailboxesPage() {
   const { data: mailboxes, isLoading } = useMailboxes();
@@ -48,7 +51,11 @@ export function MailboxesPage() {
 function MailboxCard({ mailbox }: { mailbox: Mailbox }) {
   const del = useDeleteMailbox();
   const test = useTestMailbox();
+  const update = useUpdateMailbox();
+  const domainAuth = useCheckDomainAuth();
+  const reactivate = useReactivateMailbox();
   const [note, setNote] = useState<string | null>(null);
+  const [showReport, setShowReport] = useState(false);
 
   const sendTest = async (): Promise<void> => {
     setNote(null);
@@ -60,12 +67,31 @@ function MailboxCard({ mailbox }: { mailbox: Mailbox }) {
     }
   };
 
+  const runDomainAuth = async (): Promise<void> => {
+    setNote(null);
+    setShowReport(true);
+    try {
+      await domainAuth.mutateAsync(mailbox.id);
+    } catch (e) {
+      setNote(`✕ ${extractApiError(e)}`);
+    }
+  };
+
   const statusClass =
     mailbox.status === 'ACTIVE'
       ? 'bg-green-500/20 text-green-300'
       : mailbox.status === 'ERROR'
         ? 'bg-red-500/20 text-red-300'
-        : 'bg-slate-500/20 text-slate-300';
+        : mailbox.status === 'PAUSED'
+          ? 'bg-amber-500/20 text-amber-300'
+          : 'bg-slate-500/20 text-slate-300';
+
+  const healthClass =
+    mailbox.healthScore >= 80
+      ? 'text-green-300'
+      : mailbox.healthScore >= 50
+        ? 'text-amber-300'
+        : 'text-red-400';
 
   return (
     <div className="rounded-lg border border-surface-border bg-surface-raised p-4">
@@ -76,9 +102,14 @@ function MailboxCard({ mailbox }: { mailbox: Mailbox }) {
             {mailbox.displayName ?? '—'} · {mailbox.provider}
           </div>
         </div>
-        <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${statusClass}`}>
-          {mailbox.status}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-semibold ${healthClass}`} title="Health score">
+            {mailbox.healthScore}
+          </span>
+          <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${statusClass}`}>
+            {mailbox.status}
+          </span>
+        </div>
       </div>
       <dl className="space-y-1 text-xs text-slate-400">
         {mailbox.smtpHost && (
@@ -88,12 +119,38 @@ function MailboxCard({ mailbox }: { mailbox: Mailbox }) {
         )}
         <div>
           Daily: {mailbox.sentToday}/{mailbox.dailyLimit}
+          {mailbox.warmupEnabled && mailbox.warmupStartedAt && (
+            <span className="text-amber-300"> · warming up</span>
+          )}
         </div>
+        <div>
+          Sent {mailbox.sentTotal} total · {mailbox.bounceCount} bounced
+        </div>
+        {mailbox.autoPausedAt && (
+          <div className="text-amber-300">Auto-paused — health score dropped too low.</div>
+        )}
         {mailbox.lastError && <div className="text-red-400">{mailbox.lastError}</div>}
       </dl>
       {note && <p className="mt-2 text-xs text-slate-400">{note}</p>}
+      {showReport && <DomainAuthPanel report={domainAuth.data ?? mailbox.domainAuthReport} loading={domainAuth.isPending} />}
 
-      <div className="mt-3 flex justify-end gap-2">
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        <label className="flex items-center gap-1.5 pr-2 text-xs text-slate-400">
+          <input
+            type="checkbox"
+            checked={mailbox.warmupEnabled}
+            disabled={update.isPending}
+            onChange={(e) => update.mutate({ id: mailbox.id, warmupEnabled: e.target.checked })}
+          />
+          Warmup
+        </label>
+        <button
+          className="btn-ghost py-1 text-xs"
+          disabled={domainAuth.isPending}
+          onClick={() => void runDomainAuth()}
+        >
+          {domainAuth.isPending ? 'Checking…' : 'Check domain auth'}
+        </button>
         <button
           className="btn-ghost py-1 text-xs"
           disabled={test.isPending}
@@ -101,6 +158,15 @@ function MailboxCard({ mailbox }: { mailbox: Mailbox }) {
         >
           {test.isPending ? 'Sending…' : 'Send test'}
         </button>
+        {mailbox.status === 'PAUSED' && (
+          <button
+            className="btn-ghost py-1 text-xs text-amber-300"
+            disabled={reactivate.isPending}
+            onClick={() => reactivate.mutate(mailbox.id)}
+          >
+            Reactivate
+          </button>
+        )}
         <button
           className="btn-ghost py-1 text-xs text-red-400"
           disabled={del.isPending}
@@ -111,6 +177,31 @@ function MailboxCard({ mailbox }: { mailbox: Mailbox }) {
           Remove
         </button>
       </div>
+    </div>
+  );
+}
+
+function DomainAuthPanel({ report, loading }: { report?: DomainAuthReport | null; loading: boolean }) {
+  if (loading) return <p className="mt-2 text-xs text-slate-500">Running DNS checks…</p>;
+  if (!report) return null;
+
+  const rows: Array<[string, { pass: boolean; detail: string }]> = [
+    ['MX', report.mx],
+    ['SPF', report.spf],
+    ['DMARC', report.dmarc],
+    ['DKIM', report.dkim],
+  ];
+
+  return (
+    <div className="mt-2 space-y-1 rounded border border-surface-border bg-black/20 p-2 text-[11px]">
+      <div className="mb-1 text-slate-400">Domain: {report.domain}</div>
+      {rows.map(([label, check]) => (
+        <div key={label} className="flex items-start gap-2">
+          <span className={check.pass ? 'text-green-400' : 'text-red-400'}>{check.pass ? '✓' : '✕'}</span>
+          <span className="font-medium text-slate-300">{label}:</span>
+          <span className="text-slate-500">{check.detail}</span>
+        </div>
+      ))}
     </div>
   );
 }

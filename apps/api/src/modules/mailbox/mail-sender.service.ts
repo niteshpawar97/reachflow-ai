@@ -7,6 +7,7 @@ import {
 import { createTransport, type Transporter } from 'nodemailer';
 import { PrismaService } from '@reachflow/database';
 import { MailboxService } from './mailbox.service';
+import { daysSince, warmupEffectiveLimit } from './warmup-schedule';
 
 export interface OutgoingMessage {
   to: string;
@@ -67,9 +68,14 @@ export class MailSenderService {
     if (mailbox.status === 'PAUSED') {
       throw new BadRequestException('Mailbox is paused');
     }
-    if (mailbox.sentToday >= mailbox.dailyLimit) {
+    const effectiveLimit =
+      mailbox.warmupEnabled && mailbox.warmupStartedAt
+        ? warmupEffectiveLimit(mailbox.dailyLimit, daysSince(mailbox.warmupStartedAt))
+        : mailbox.dailyLimit;
+    if (mailbox.sentToday >= effectiveLimit) {
       throw new BadRequestException(
-        `Daily send limit reached (${mailbox.sentToday}/${mailbox.dailyLimit})`,
+        `Daily send limit reached (${mailbox.sentToday}/${effectiveLimit}` +
+          `${mailbox.warmupEnabled ? ' — mailbox is still warming up' : ''})`,
       );
     }
 

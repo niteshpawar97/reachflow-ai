@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { CampaignLeadStatus, CampaignStatus, Prisma, PrismaService } from '@reachflow/database';
 import { MailSenderService } from '../mailbox/mail-sender.service';
+import { MailboxHealthService } from '../mailbox/mailbox-health.service';
 import { PersonalizationService } from '../personalization/personalization.service';
 import { appendUnsubscribeFooter, injectTracking, textToHtml, trackingBaseUrl } from './tracking-inject';
 import { SuppressionService } from '../suppression/suppression.service';
@@ -37,6 +38,7 @@ export class CampaignSenderService {
     private readonly sender: MailSenderService,
     private readonly personalization: PersonalizationService,
     private readonly suppressions: SuppressionService,
+    private readonly health: MailboxHealthService,
   ) {}
 
   async processDue(workspaceId: string, limit = 25): Promise<ProcessResult> {
@@ -137,6 +139,7 @@ export class CampaignSenderService {
     // Hard bounce: the SMTP server permanently rejected the recipient (5xx at
     // RCPT TO). Suppress the address and stop this lead's sequence for good.
     if (sendResult.bounced) {
+      await this.health.recordBounce(mailboxId);
       await this.suppressions.add(row.workspaceId, contact.email, 'BOUNCED');
       await this.prisma.$transaction([
         this.prisma.campaignLead.update({
@@ -152,6 +155,8 @@ export class CampaignSenderService {
       ]);
       return 'bounced';
     }
+
+    await this.health.recordSend(mailboxId);
 
     // Advance to the next step (or finish).
     const nextStep = steps[row.currentStep + 1];

@@ -81,6 +81,16 @@ export class MailboxService {
       ...(dto.warmupEnabled !== undefined ? { warmupEnabled: dto.warmupEnabled } : {}),
     };
 
+    // Start the ramp clock the first time warmup is switched on.
+    if (dto.warmupEnabled === true && !existing.warmupStartedAt) {
+      data.warmupStartedAt = new Date();
+      data.warmupDay = 0;
+    }
+    if (dto.warmupEnabled === false) {
+      data.warmupStartedAt = null;
+      data.warmupDay = 0;
+    }
+
     // Re-encrypt only when a new password is supplied.
     if (dto.smtpPassword) {
       if (!encryptionConfigured()) {

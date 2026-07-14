@@ -529,6 +529,17 @@ model Mailbox {
   sentToday        Int             @default(0) @map("sent_today")
   warmupEnabled    Boolean         @default(false) @map("warmup_enabled")
   lastError        String?         @map("last_error")
+  // Domain auth (M22) — SPF/DKIM/DMARC/MX DNS checks, cached (DNS lookups are slow).
+  domainAuthReport Json?           @map("domain_auth_report")
+  domainAuthCheckedAt DateTime?    @map("domain_auth_checked_at") @db.Timestamptz(6)
+  // Health scoring (M26) — rolling bounce/error counters + computed score.
+  bounceCount      Int             @default(0) @map("bounce_count")
+  sentTotal        Int             @default(0) @map("sent_total")
+  healthScore      Int             @default(100) @map("health_score")
+  autoPausedAt     DateTime?       @map("auto_paused_at")
+  // Warmup engine (M25) — ramp state.
+  warmupStartedAt  DateTime?       @map("warmup_started_at")
+  warmupDay        Int             @default(0) @map("warmup_day")
   // IMAP (reply sync, M55) — most providers (Zoho/Gmail/cPanel) reuse the SMTP
   // password, so we read the same secretCiphertext; only host/port/user differ.
   imapHost         String?         @map("imap_host")

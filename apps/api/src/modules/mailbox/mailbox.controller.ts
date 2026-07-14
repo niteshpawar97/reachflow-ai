@@ -25,6 +25,8 @@ import {
 } from './dto/mailbox.dto';
 import { MailboxService } from './mailbox.service';
 import { MailSenderService } from './mail-sender.service';
+import { DomainAuthService, type DomainAuthReport } from './domain-auth.service';
+import { MailboxHealthService } from './mailbox-health.service';
 
 // Workspace-scoped via the X-Workspace-Id header (resolved by WorkspaceGuard).
 @Controller('mailboxes')
@@ -33,7 +35,27 @@ export class MailboxController {
   constructor(
     private readonly mailboxes: MailboxService,
     private readonly sender: MailSenderService,
+    private readonly domainAuth: DomainAuthService,
+    private readonly health: MailboxHealthService,
   ) {}
+
+  @Post(':id/domain-auth/check')
+  checkDomainAuth(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<DomainAuthReport> {
+    return this.domainAuth.check(workspaceId, id);
+  }
+
+  @Post(':id/reactivate')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async reactivate(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.mailboxes.get(workspaceId, id); // 404s if not in this workspace
+    await this.health.reactivate(id);
+  }
 
   @Post(':id/test')
   test(
