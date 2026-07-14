@@ -117,3 +117,34 @@ export async function rejectLeadEmail(leadId: string, emailId: string): Promise<
   const { data } = await api.post<EmailDraft>(`/leads/${leadId}/email/${emailId}/reject`);
   return data;
 }
+
+export interface WebsiteAudit {
+  id: string;
+  url: string;
+  status: 'OK' | 'PARTIAL' | 'FAILED';
+  https: boolean;
+  mobileFriendly: boolean;
+  hasContactForm: boolean;
+  hasCta: boolean;
+  performanceScore: number | null;
+  responseTimeMs: number | null;
+  cms: string | null;
+  findings: Array<{ code: string; severity: 'high' | 'medium' | 'low'; message: string }> | null;
+  aiSummary: string | null;
+  createdAt: string;
+}
+
+export async function runLeadAudit(id: string): Promise<WebsiteAudit> {
+  const { data } = await api.post<WebsiteAudit>(`/leads/${id}/audit`);
+  return data;
+}
+
+export async function getLeadAudit(id: string): Promise<WebsiteAudit | null> {
+  const { data } = await api.get<WebsiteAudit | null>(`/leads/${id}/audit`);
+  return data;
+}
+
+export async function summarizeLeadAudit(id: string): Promise<WebsiteAudit> {
+  const { data } = await api.post<WebsiteAudit>(`/leads/${id}/audit/summary`);
+  return data;
+}

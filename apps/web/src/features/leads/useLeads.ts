@@ -5,10 +5,13 @@ import {
   createLead,
   deleteLead,
   generateLeadEmail,
+  getLeadAudit,
   importLeadsCsv,
   listLeadEmails,
   listLeads,
   rejectLeadEmail,
+  runLeadAudit,
+  summarizeLeadAudit,
   updateLeadStatus,
   type CreateLeadPayload,
   type LeadStatus,
@@ -53,6 +56,31 @@ export function useImportLeads() {
   return useMutation({
     mutationFn: (csv: string) => importLeadsCsv(csv),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['leads'] }),
+  });
+}
+
+export function useLeadAudit(leadId: string) {
+  const wsId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  return useQuery({
+    queryKey: ['lead-audit', wsId, leadId],
+    queryFn: () => getLeadAudit(leadId),
+    enabled: Boolean(wsId && leadId),
+  });
+}
+
+export function useRunAudit(leadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => runLeadAudit(leadId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-audit'] }),
+  });
+}
+
+export function useSummarizeAudit(leadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => summarizeLeadAudit(leadId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-audit'] }),
   });
 }
 

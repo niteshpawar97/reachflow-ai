@@ -11,6 +11,7 @@ import { WebsiteAnalyzerService } from '../website-analyzer/website-analyzer.ser
 import { LeadScoringService } from '../lead-scoring/lead-scoring.service';
 import { EmailVerificationService } from '../email-verification/email-verification.service';
 import { PersonalizationService } from '../personalization/personalization.service';
+import { AuditSummaryService } from '../audit-summary/audit-summary.service';
 import { CreateLeadSchema, type CreateLeadDto, type ListLeadsQuery, type UpdateLeadDto } from './dto/lead.dto';
 import { DEFAULT_MAPPING, type ImportResult } from './dto/import.dto';
 
@@ -28,7 +29,27 @@ export class LeadsService {
     private readonly scoring: LeadScoringService,
     private readonly emailVerifier: EmailVerificationService,
     private readonly personalization: PersonalizationService,
+    private readonly auditSummary: AuditSummaryService,
   ) {}
+
+  /** Generate a client-facing AI narrative for the lead's latest audit and
+   * persist it on that audit row (M35). */
+  async summarizeAudit(workspaceId: string, leadId: string) {
+    const lead = await this.get(workspaceId, leadId);
+    const audit = await this.prisma.websiteAudit.findFirst({
+      where: { workspaceId, companyId: lead.companyId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!audit) {
+      throw new BadRequestException('Run a website audit first — nothing to summarize');
+    }
+
+    const result = await this.auditSummary.summarize(audit, lead.company);
+    return this.prisma.websiteAudit.update({
+      where: { id: audit.id },
+      data: { aiSummary: result.summary },
+    });
+  }
 
   /** Generate + persist an AI-personalized cold email for the lead (M39).
    * Grounded in the lead's latest website audit + score. */

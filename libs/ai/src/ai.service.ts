@@ -82,8 +82,7 @@ export class AiService {
     }
 
     const startedAt = Date.now();
-    const promise = active
-      .complete(request)
+    const promise = this.callWithRetry(active, request)
       .then((result) => {
         this.logger.log(
           `ai ${result.provider}/${result.model} tier=${request.tier ?? 'balanced'} ` +
@@ -147,6 +146,44 @@ export class AiService {
       maxTokens: opts.maxTokens,
       temperature: opts.temperature,
     });
+  }
+
+  /** Retry a provider call on transient errors (overload/rate-limit) with
+   * exponential backoff. Free tiers 503/429 intermittently. */
+  private async callWithRetry(
+    provider: AiProvider,
+    request: AiCompletionRequest,
+  ): Promise<AiResult> {
+    const maxAttempts = 3;
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return await provider.complete(request);
+      } catch (e) {
+        lastErr = e;
+        if (attempt >= maxAttempts || !this.isTransient(e)) throw e;
+        const delayMs = 800 * 2 ** (attempt - 1); // 800ms, 1600ms
+        this.logger.warn(
+          `ai ${provider.name} transient error (attempt ${attempt}/${maxAttempts}), retrying in ${delayMs}ms`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+    throw lastErr;
+  }
+
+  private isTransient(e: unknown): boolean {
+    const status = (e as { status?: number })?.status;
+    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 529) {
+      return true;
+    }
+    const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+    return (
+      msg.includes('overloaded') ||
+      msg.includes('unavailable') ||
+      msg.includes('high demand') ||
+      msg.includes('rate limit')
+    );
   }
 
   private cacheKey(provider: string, request: AiCompletionRequest): string {

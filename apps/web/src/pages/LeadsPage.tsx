@@ -7,9 +7,12 @@ import {
   useDeleteLead,
   useGenerateEmail,
   useImportLeads,
+  useLeadAudit,
   useLeadEmails,
   useLeads,
   useRejectLeadEmail,
+  useRunAudit,
+  useSummarizeAudit,
   useUpdateLeadStatus,
 } from '../features/leads/useLeads';
 
@@ -242,9 +245,121 @@ function LeadDrawer({
           </select>
         </div>
 
+        <AuditSection lead={lead} />
         <EmailSection lead={lead} />
       </div>
     </div>
+  );
+}
+
+function AuditSection({ lead }: { lead: Lead }) {
+  const { data: audit, isLoading } = useLeadAudit(lead.id);
+  const runAudit = useRunAudit(lead.id);
+  const summarize = useSummarizeAudit(lead.id);
+  const [err, setErr] = useState<string | null>(null);
+
+  const doRun = async (): Promise<void> => {
+    setErr(null);
+    try {
+      await runAudit.mutateAsync();
+    } catch (e) {
+      setErr(extractApiError(e));
+    }
+  };
+
+  const doSummarize = async (): Promise<void> => {
+    setErr(null);
+    try {
+      await summarize.mutateAsync();
+    } catch (e) {
+      setErr(extractApiError(e));
+    }
+  };
+
+  return (
+    <div className="mt-6 border-t border-surface-border pt-4">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Website audit</h3>
+        <button
+          className="btn-ghost py-1 text-xs"
+          disabled={runAudit.isPending}
+          onClick={() => void doRun()}
+        >
+          {runAudit.isPending ? 'Auditing…' : audit ? 'Re-audit' : 'Run audit'}
+        </button>
+      </div>
+
+      {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
+      {isLoading && <p className="text-sm text-slate-500">Loading…</p>}
+      {!isLoading && !audit && !runAudit.isPending && (
+        <p className="text-sm text-slate-500">No audit yet — run one to analyze the site.</p>
+      )}
+
+      {audit && (
+        <div className="space-y-3 text-sm">
+          <div className="flex flex-wrap gap-2">
+            {audit.performanceScore != null && (
+              <Badge label={`Perf ${audit.performanceScore}/100`} />
+            )}
+            {audit.responseTimeMs != null && (
+              <Badge label={`${(audit.responseTimeMs / 1000).toFixed(1)}s load`} />
+            )}
+            <Badge label={audit.mobileFriendly ? 'Mobile ✓' : 'No mobile'} />
+            <Badge label={audit.https ? 'HTTPS ✓' : 'No HTTPS'} />
+            {audit.cms && <Badge label={audit.cms} />}
+          </div>
+
+          {audit.findings && audit.findings.length > 0 && (
+            <ul className="space-y-1 text-xs text-slate-400">
+              {audit.findings.slice(0, 6).map((f) => (
+                <li key={f.code}>
+                  <span
+                    className={
+                      f.severity === 'high'
+                        ? 'text-red-400'
+                        : f.severity === 'medium'
+                          ? 'text-amber-400'
+                          : 'text-slate-500'
+                    }
+                  >
+                    ●
+                  </span>{' '}
+                  {f.message}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="rounded-md border border-surface-border bg-surface p-3">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-300">AI summary</span>
+              <button
+                className="btn-primary py-1 text-xs"
+                disabled={summarize.isPending}
+                onClick={() => void doSummarize()}
+              >
+                {summarize.isPending ? 'Summarizing…' : audit.aiSummary ? 'Regenerate' : 'Summarize'}
+              </button>
+            </div>
+            {audit.aiSummary ? (
+              <p className="whitespace-pre-wrap text-xs text-slate-300">{audit.aiSummary}</p>
+            ) : (
+              <p className="text-xs text-slate-500">
+                Turn these findings into a client-facing narrative.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Badge({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-surface-border bg-surface px-2 py-0.5 text-xs text-slate-300">
+      {label}
+    </span>
   );
 }
 

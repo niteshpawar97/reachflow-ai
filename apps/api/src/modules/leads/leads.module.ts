@@ -5,6 +5,7 @@ import { WebsiteAnalyzerModule } from '../website-analyzer/website-analyzer.modu
 import { LeadScoringModule } from '../lead-scoring/lead-scoring.module';
 import { EmailVerificationModule } from '../email-verification/email-verification.module';
 import { PersonalizationModule } from '../personalization/personalization.module';
+import { AuditSummaryModule } from '../audit-summary/audit-summary.module';
 import { LeadsController } from './leads.controller';
 import { LeadsService } from './leads.service';
 
@@ -15,6 +16,7 @@ import { LeadsService } from './leads.service';
     LeadScoringModule,
     EmailVerificationModule,
     PersonalizationModule,
+    AuditSummaryModule,
   ],
   controllers: [LeadsController],
   providers: [LeadsService, JwtAuthGuard, WorkspaceGuard],
