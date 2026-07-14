@@ -28,11 +28,15 @@ import {
   type UpdateCampaignDto,
 } from './dto/campaign.dto';
 import { CampaignsService } from './campaigns.service';
+import { CampaignSenderService } from './campaign-sender.service';
 
 @Controller('campaigns')
 @UseGuards(JwtAuthGuard, WorkspaceGuard)
 export class CampaignsController {
-  constructor(private readonly campaigns: CampaignsService) {}
+  constructor(
+    private readonly campaigns: CampaignsService,
+    private readonly sender: CampaignSenderService,
+  ) {}
 
   @Get()
   list(@WorkspaceId() workspaceId: string): Promise<unknown> {
@@ -132,5 +136,11 @@ export class CampaignsController {
   @Post('due-sends/plan')
   planDueSends(@WorkspaceId() workspaceId: string): Promise<unknown> {
     return this.campaigns.planDueSends(workspaceId);
+  }
+
+  /** Send all currently-due campaign emails inline (no queue / Redis-free). */
+  @Post('due-sends/run')
+  runDueSends(@WorkspaceId() workspaceId: string): Promise<unknown> {
+    return this.sender.processDue(workspaceId);
   }
 }
