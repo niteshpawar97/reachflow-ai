@@ -65,3 +65,8 @@ export async function syncMailboxInbox(mailboxId: string): Promise<{ fetched: nu
   const { data } = await api.post(`/inbox/sync/${mailboxId}`);
   return data;
 }
+
+export async function convertToDeal(campaignLeadId: string): Promise<{ id: string }> {
+  const { data } = await api.post<{ id: string }>(`/inbox/threads/${campaignLeadId}/convert-to-deal`);
+  return data;
+}

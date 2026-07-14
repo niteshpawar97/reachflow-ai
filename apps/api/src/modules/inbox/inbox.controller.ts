@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SendReplySchema, type SendReplyDto } from './dto/inbox.dto';
 import { InboxService } from './inbox.service';
 import { ImapSyncService } from './imap-sync.service';
+import { DealsService } from '../deals/deals.service';
 
 @Controller('inbox')
 @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -13,7 +14,16 @@ export class InboxController {
   constructor(
     private readonly inbox: InboxService,
     private readonly imapSync: ImapSyncService,
+    private readonly deals: DealsService,
   ) {}
+
+  @Post('threads/:campaignLeadId/convert-to-deal')
+  convertToDeal(
+    @WorkspaceId() workspaceId: string,
+    @Param('campaignLeadId', ParseUUIDPipe) campaignLeadId: string,
+  ): Promise<unknown> {
+    return this.deals.convertReplyToDeal(workspaceId, campaignLeadId);
+  }
 
   @Get('threads')
   listThreads(@WorkspaceId() workspaceId: string): Promise<unknown> {

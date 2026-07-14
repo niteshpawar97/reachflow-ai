@@ -14,7 +14,7 @@ const NAV: NavItem[] = [
   { to: '/campaigns', label: 'Campaigns', icon: '✉' },
   { to: '/mailboxes', label: 'Mailboxes', icon: '✱' },
   { to: '/inbox', label: 'Inbox', icon: '⌂' },
-  { to: '/crm', label: 'CRM', icon: '⇄', soon: true },
+  { to: '/crm', label: 'CRM', icon: '⇄' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ];
 

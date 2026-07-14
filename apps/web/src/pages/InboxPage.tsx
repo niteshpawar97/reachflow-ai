@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { extractApiError } from '../lib/api';
 import {
   useSendReply,
@@ -7,7 +8,7 @@ import {
   useThread,
   useThreads,
 } from '../features/inbox/useInbox';
-import type { Message, ReplyClassification } from '../features/inbox/inbox.api';
+import { convertToDeal, type Message, type ReplyClassification } from '../features/inbox/inbox.api';
 import { useMailboxes } from '../features/mailboxes/useMailboxes';
 
 const CLASSIFICATION_LABEL: Record<ReplyClassification, string> = {
@@ -129,9 +130,22 @@ function ThreadView({ campaignLeadId }: { campaignLeadId: string }) {
   const { data: messages, isLoading } = useThread(campaignLeadId);
   const sendReply = useSendReply(campaignLeadId);
   const suggest = useSuggestReply();
+  const convert = useMutation({ mutationFn: () => convertToDeal(campaignLeadId) });
   const [draft, setDraft] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [dealMsg, setDealMsg] = useState<string | null>(null);
+
+  const doConvert = async (): Promise<void> => {
+    setErr(null);
+    setDealMsg(null);
+    try {
+      await convert.mutateAsync();
+      setDealMsg('Added to CRM pipeline.');
+    } catch (e) {
+      setErr(extractApiError(e));
+    }
+  };
 
   const lastInbound = [...(messages ?? [])].reverse().find((m) => m.direction === 'INBOUND');
 
@@ -160,6 +174,12 @@ function ThreadView({ campaignLeadId }: { campaignLeadId: string }) {
 
   return (
     <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-surface-border p-3">
+        <span className="text-sm text-slate-400">{dealMsg}</span>
+        <button className="btn-ghost py-1 text-xs" disabled={convert.isPending} onClick={() => void doConvert()}>
+          {convert.isPending ? 'Adding…' : '→ Convert to deal'}
+        </button>
+      </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {isLoading && <p className="text-sm text-slate-500">Loading…</p>}
         {messages?.map((m) => (
