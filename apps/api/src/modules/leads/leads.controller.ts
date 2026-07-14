@@ -81,6 +81,14 @@ export class LeadsController {
     return this.leads.getLatestAudit(workspaceId, id);
   }
 
+  @Post(':id/verify')
+  verify(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<unknown> {
+    return this.leads.verifyLeadEmail(workspaceId, id);
+  }
+
   @Post(':id/score')
   score(
     @WorkspaceId() workspaceId: string,

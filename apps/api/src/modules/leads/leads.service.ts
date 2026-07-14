@@ -6,8 +6,10 @@ import {
 } from '@nestjs/common';
 import { parse } from 'csv-parse/sync';
 import { Prisma, PrismaService } from '@reachflow/database';
+import { createHash } from 'node:crypto';
 import { WebsiteAnalyzerService } from '../website-analyzer/website-analyzer.service';
 import { LeadScoringService } from '../lead-scoring/lead-scoring.service';
+import { EmailVerificationService } from '../email-verification/email-verification.service';
 import { CreateLeadSchema, type CreateLeadDto, type ListLeadsQuery, type UpdateLeadDto } from './dto/lead.dto';
 import { DEFAULT_MAPPING, type ImportResult } from './dto/import.dto';
 
@@ -23,7 +25,57 @@ export class LeadsService {
     private readonly prisma: PrismaService,
     private readonly analyzer: WebsiteAnalyzerService,
     private readonly scoring: LeadScoringService,
+    private readonly emailVerifier: EmailVerificationService,
   ) {}
+
+  /** Verify the lead's contact email; caches result + updates contact status (M36). */
+  async verifyLeadEmail(workspaceId: string, leadId: string) {
+    const lead = await this.prisma.lead.findFirst({
+      where: { id: leadId, workspaceId, deletedAt: null },
+      include: { contact: true },
+    });
+    if (!lead) {
+      throw new NotFoundException('Lead not found');
+    }
+    if (!lead.contact?.email) {
+      throw new BadRequestException('Lead has no contact email to verify');
+    }
+
+    const r = await this.emailVerifier.verify(lead.contact.email);
+    const emailHash = createHash('sha256').update(r.email).digest('hex');
+
+    const [verification] = await this.prisma.$transaction([
+      this.prisma.emailVerification.upsert({
+        where: { workspaceId_emailHash: { workspaceId, emailHash } },
+        create: {
+          workspaceId,
+          emailHash,
+          email: r.email,
+          status: r.status,
+          mxOk: r.mxOk,
+          disposable: r.disposable,
+          roleAccount: r.roleAccount,
+          riskScore: r.riskScore,
+          reason: r.reason,
+        },
+        update: {
+          status: r.status,
+          mxOk: r.mxOk,
+          disposable: r.disposable,
+          roleAccount: r.roleAccount,
+          riskScore: r.riskScore,
+          reason: r.reason,
+          checkedAt: new Date(),
+        },
+      }),
+      this.prisma.contact.update({
+        where: { id: lead.contact.id },
+        data: { emailStatus: r.status },
+      }),
+    ]);
+
+    return verification;
+  }
 
   /** Compute + persist a deterministic 0-100 score for the lead (M37). */
   async scoreLead(workspaceId: string, leadId: string) {

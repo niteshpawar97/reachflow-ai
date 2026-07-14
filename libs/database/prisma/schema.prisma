@@ -78,8 +78,9 @@ model Workspace {
   companies     Company[]
   contacts      Contact[]
   leads         Lead[]
-  websiteAudits WebsiteAudit[]
-  leadScores    LeadScore[]
+  websiteAudits      WebsiteAudit[]
+  leadScores         LeadScore[]
+  emailVerifications EmailVerification[]
 
   @@index([ownerUserId])
   @@index([deletedAt])
@@ -257,6 +258,28 @@ model LeadScore {
 
   @@index([workspaceId, score])
   @@map("lead_scores")
+}
+
+// Cached email verification result (M36). status uses EmailStatus.
+// Without SMTP RCPT (port 25 often blocked), VALID means good syntax + live MX
+// + not disposable/role — deliverability is inferred, not mailbox-confirmed.
+model EmailVerification {
+  id          String      @id @default(uuid()) @db.Uuid
+  workspaceId String      @map("workspace_id") @db.Uuid
+  emailHash   String      @map("email_hash")
+  email       String
+  status      EmailStatus @default(UNKNOWN)
+  mxOk        Boolean     @default(false) @map("mx_ok")
+  disposable  Boolean     @default(false)
+  roleAccount Boolean     @default(false) @map("role_account")
+  riskScore   Int         @map("risk_score")
+  reason      String?
+  checkedAt   DateTime    @default(now()) @map("checked_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, emailHash])
+  @@map("email_verifications")
 }
 
 enum AuditStatus {
