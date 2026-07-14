@@ -14,6 +14,7 @@ import {
   useLeads,
   useRejectLeadEmail,
   useRunAudit,
+  useScrapeContacts,
   useSummarizeAudit,
   useUpdateLeadStatus,
 } from '../features/leads/useLeads';
@@ -258,7 +259,25 @@ function AuditSection({ lead }: { lead: Lead }) {
   const { data: audit, isLoading } = useLeadAudit(lead.id);
   const runAudit = useRunAudit(lead.id);
   const summarize = useSummarizeAudit(lead.id);
+  const scrape = useScrapeContacts(lead.id);
   const [err, setErr] = useState<string | null>(null);
+  const [scrapeMsg, setScrapeMsg] = useState<string | null>(null);
+
+  const doScrape = async (): Promise<void> => {
+    setErr(null);
+    setScrapeMsg(null);
+    try {
+      const r = await scrape.mutateAsync();
+      const bits: string[] = [];
+      bits.push(r.emails.length ? `${r.emails.length} email(s): ${r.emails.slice(0, 3).join(', ')}` : 'no emails found');
+      const socialCount = Object.keys(r.socials).length;
+      if (socialCount) bits.push(`${socialCount} social link(s)`);
+      if (r.contactUpdated) bits.push('contact email auto-filled ✓');
+      setScrapeMsg(bits.join(' · '));
+    } catch (e) {
+      setErr(extractApiError(e));
+    }
+  };
 
   const doRun = async (): Promise<void> => {
     setErr(null);
@@ -282,15 +301,26 @@ function AuditSection({ lead }: { lead: Lead }) {
     <div className="mt-6 border-t border-surface-border pt-4">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold">Website audit</h3>
-        <button
-          className="btn-ghost py-1 text-xs"
-          disabled={runAudit.isPending}
-          onClick={() => void doRun()}
-        >
-          {runAudit.isPending ? 'Auditing…' : audit ? 'Re-audit' : 'Run audit'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            className="btn-ghost py-1 text-xs"
+            disabled={scrape.isPending}
+            title="Scrape the company site for emails, phone & social links"
+            onClick={() => void doScrape()}
+          >
+            {scrape.isPending ? 'Scraping…' : 'Find contacts'}
+          </button>
+          <button
+            className="btn-ghost py-1 text-xs"
+            disabled={runAudit.isPending}
+            onClick={() => void doRun()}
+          >
+            {runAudit.isPending ? 'Auditing…' : audit ? 'Re-audit' : 'Run audit'}
+          </button>
+        </div>
       </div>
 
+      {scrapeMsg && <p className="mb-3 text-xs text-slate-400">{scrapeMsg}</p>}
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
       {isLoading && <p className="text-sm text-slate-500">Loading…</p>}
       {!isLoading && !audit && !runAudit.isPending && (

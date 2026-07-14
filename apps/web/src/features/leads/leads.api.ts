@@ -161,3 +161,18 @@ export async function summarizeLeadAudit(id: string): Promise<WebsiteAudit> {
   const { data } = await api.post<WebsiteAudit>(`/leads/${id}/audit/summary`);
   return data;
 }
+
+export interface ScrapeResult {
+  url: string;
+  status: 'OK' | 'PARTIAL' | 'FAILED';
+  pagesScanned: number;
+  emails: string[];
+  phones: string[];
+  socials: { linkedin?: string; twitter?: string; facebook?: string; instagram?: string };
+  contactUpdated: boolean;
+}
+
+export async function scrapeLeadContacts(id: string): Promise<ScrapeResult> {
+  const { data } = await api.post<ScrapeResult>(`/leads/${id}/scrape`);
+  return data;
+}

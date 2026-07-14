@@ -12,6 +12,7 @@ import { LeadScoringService } from '../lead-scoring/lead-scoring.service';
 import { EmailVerificationService } from '../email-verification/email-verification.service';
 import { PersonalizationService } from '../personalization/personalization.service';
 import { AuditSummaryService } from '../audit-summary/audit-summary.service';
+import { ContactScraperService } from '../contact-scraper/contact-scraper.service';
 import { CreateLeadSchema, type CreateLeadDto, type ListLeadsQuery, type UpdateLeadDto } from './dto/lead.dto';
 import { DEFAULT_MAPPING, type ImportResult } from './dto/import.dto';
 
@@ -30,7 +31,50 @@ export class LeadsService {
     private readonly emailVerifier: EmailVerificationService,
     private readonly personalization: PersonalizationService,
     private readonly auditSummary: AuditSummaryService,
+    private readonly contactScraper: ContactScraperService,
   ) {}
+
+  /** Scrape the lead's company website for contact info (M30-33, thin/no-browser).
+   * If the lead's contact has no email, the best found email is auto-filled. */
+  async scrapeContacts(workspaceId: string, leadId: string) {
+    const lead = await this.get(workspaceId, leadId);
+    const target =
+      lead.company.website ?? (lead.company.domain ? `https://${lead.company.domain}` : null);
+    if (!target) {
+      throw new BadRequestException('Lead company has no website or domain to scrape');
+    }
+
+    const result = await this.contactScraper.scrape(target);
+
+    // Persist socials on the company (best-effort, non-destructive).
+    if (Object.keys(result.socials).length > 0) {
+      await this.prisma.company.update({
+        where: { id: lead.companyId },
+        data: { socials: result.socials as unknown as Prisma.InputJsonValue },
+      });
+    }
+
+    // Auto-fill a contact email if we found one and none is set yet.
+    const bestEmail = result.emails[0] ?? null;
+    let contactUpdated = false;
+    if (bestEmail) {
+      if (lead.contact && !lead.contact.email) {
+        await this.prisma.contact.update({
+          where: { id: lead.contact.id },
+          data: { email: bestEmail },
+        });
+        contactUpdated = true;
+      } else if (!lead.contact) {
+        const contact = await this.prisma.contact.create({
+          data: { workspaceId, companyId: lead.companyId, email: bestEmail },
+        });
+        await this.prisma.lead.update({ where: { id: leadId }, data: { contactId: contact.id } });
+        contactUpdated = true;
+      }
+    }
+
+    return { ...result, contactUpdated };
+  }
 
   /** Generate a client-facing AI narrative for the lead's latest audit and
    * persist it on that audit row (M35). */

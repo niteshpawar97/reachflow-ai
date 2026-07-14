@@ -93,6 +93,14 @@ export class LeadsController {
     return this.leads.summarizeAudit(workspaceId, id);
   }
 
+  @Post(':id/scrape')
+  scrapeContacts(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<unknown> {
+    return this.leads.scrapeContacts(workspaceId, id);
+  }
+
   @Post(':id/verify')
   verify(
     @WorkspaceId() workspaceId: string,

@@ -6,6 +6,7 @@ import { LeadScoringModule } from '../lead-scoring/lead-scoring.module';
 import { EmailVerificationModule } from '../email-verification/email-verification.module';
 import { PersonalizationModule } from '../personalization/personalization.module';
 import { AuditSummaryModule } from '../audit-summary/audit-summary.module';
+import { ContactScraperModule } from '../contact-scraper/contact-scraper.module';
 import { LeadsController } from './leads.controller';
 import { LeadsService } from './leads.service';
 
@@ -17,6 +18,7 @@ import { LeadsService } from './leads.service';
     EmailVerificationModule,
     PersonalizationModule,
     AuditSummaryModule,
+    ContactScraperModule,
   ],
   controllers: [LeadsController],
   providers: [LeadsService, JwtAuthGuard, WorkspaceGuard],

@@ -13,6 +13,7 @@ import {
   listLeads,
   rejectLeadEmail,
   runLeadAudit,
+  scrapeLeadContacts,
   summarizeLeadAudit,
   updateLeadStatus,
   type CreateLeadPayload,
@@ -75,6 +76,14 @@ export function useRunAudit(leadId: string) {
   return useMutation({
     mutationFn: () => runLeadAudit(leadId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-audit'] }),
+  });
+}
+
+export function useScrapeContacts(leadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => scrapeLeadContacts(leadId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['leads'] }),
   });
 }
 
