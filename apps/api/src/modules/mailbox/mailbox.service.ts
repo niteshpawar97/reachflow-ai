@@ -7,6 +7,15 @@ import {
 import { Prisma, PrismaService, type Mailbox } from '@reachflow/database';
 import { decryptSecret, encryptSecret, encryptionConfigured } from './mailbox.crypto';
 import type { CreateMailboxDto, UpdateMailboxDto } from './dto/mailbox.dto';
+import { DEFAULT_IMAP_PORT, inferImapHost } from '../inbox/imap-provider-defaults';
+
+export interface ImapConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  username: string;
+  password: string;
+}
 
 /** Public shape — NEVER includes the encrypted secret. */
 export type SafeMailbox = Omit<Mailbox, 'secretCiphertext'>;
@@ -103,6 +112,35 @@ export class MailboxService {
     const mailbox = await this.requireMailbox(workspaceId, id);
     if (!mailbox.secretCiphertext) return null;
     return JSON.parse(decryptSecret(mailbox.secretCiphertext)) as Record<string, unknown>;
+  }
+
+  /** Effective IMAP connection settings for a mailbox — explicit overrides win,
+   * else inferred from the SMTP host (same account creds in almost all cases).
+   * Returns null when there's no password or no host to connect to. */
+  async getImapConfig(workspaceId: string, id: string): Promise<ImapConfig | null> {
+    const mailbox = await this.requireMailbox(workspaceId, id);
+    const host = mailbox.imapHost ?? inferImapHost(mailbox.smtpHost);
+    if (!host) return null;
+
+    const creds = await this.getCredentials(workspaceId, id);
+    const password = creds?.password;
+    if (typeof password !== 'string') return null;
+
+    return {
+      host,
+      port: mailbox.imapPort ?? DEFAULT_IMAP_PORT,
+      secure: mailbox.imapSecure,
+      username: mailbox.imapUsername ?? mailbox.smtpUsername ?? mailbox.email,
+      password,
+    };
+  }
+
+  /** Advance the IMAP sync cursor after a successful poll. */
+  async updateImapCursor(mailboxId: string, lastUid: number): Promise<void> {
+    await this.prisma.mailbox.update({
+      where: { id: mailboxId },
+      data: { imapLastUid: lastUid, imapLastSyncAt: new Date() },
+    });
   }
 
   private async requireMailbox(workspaceId: string, id: string): Promise<Mailbox> {

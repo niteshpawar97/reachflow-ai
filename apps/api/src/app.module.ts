@@ -13,6 +13,7 @@ import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DiscoveryModule } from './modules/discovery/discovery.module';
 import { HealthModule } from './modules/health/health.module';
+import { InboxModule } from './modules/inbox/inbox.module';
 import { LeadsModule } from './modules/leads/leads.module';
 import { MailboxModule } from './modules/mailbox/mailbox.module';
 import { SuppressionModule } from './modules/suppression/suppression.module';
@@ -54,6 +55,7 @@ import { WorkspaceModule } from './modules/workspace/workspace.module';
     CampaignsModule,
     DashboardModule,
     DiscoveryModule,
+    InboxModule,
     LeadsModule,
     MailboxModule,
     SuppressionModule,

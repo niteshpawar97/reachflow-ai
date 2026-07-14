@@ -11,6 +11,7 @@ export interface ProcessResult {
   sent: number;
   failed: number;
   skipped: number;
+  bounced: number;
   errors: Array<{ campaignLeadId: string; message: string }>;
 }
 
@@ -55,7 +56,7 @@ export class CampaignSenderService {
       take: limit,
     });
 
-    const result: ProcessResult = { processed: 0, sent: 0, failed: 0, skipped: 0, errors: [] };
+    const result: ProcessResult = { processed: 0, sent: 0, failed: 0, skipped: 0, bounced: 0, errors: [] };
     for (const row of due) {
       result.processed += 1;
       try {
@@ -77,7 +78,7 @@ export class CampaignSenderService {
 
   private async sendCampaignLead(
     row: DueCampaignLead,
-  ): Promise<'sent' | 'skipped'> {
+  ): Promise<'sent' | 'skipped' | 'bounced'> {
     const steps = [...row.campaign.steps].sort((a, b) => a.position - b.position);
     const step = steps[row.currentStep];
 
@@ -126,12 +127,31 @@ export class CampaignSenderService {
     const base = trackingBaseUrl();
     const html = appendUnsubscribeFooter(injectTracking(textToHtml(body), token, base), token, base);
 
-    await this.sender.sendViaMailbox(row.workspaceId, mailboxId, {
+    const sendResult = await this.sender.sendViaMailbox(row.workspaceId, mailboxId, {
       to: contact.email,
       subject,
       text: body,
       html,
     });
+
+    // Hard bounce: the SMTP server permanently rejected the recipient (5xx at
+    // RCPT TO). Suppress the address and stop this lead's sequence for good.
+    if (sendResult.bounced) {
+      await this.suppressions.add(row.workspaceId, contact.email, 'BOUNCED');
+      await this.prisma.$transaction([
+        this.prisma.campaignLead.update({
+          where: { id: row.id },
+          data: {
+            status: CampaignLeadStatus.BOUNCED,
+            nextSendAt: null,
+            lastEventAt: new Date(),
+            stopReason: `bounced: ${sendResult.bounceReason ?? 'recipient rejected'}`,
+          },
+        }),
+        this.prisma.lead.update({ where: { id: row.leadId }, data: { status: 'SUPPRESSED' } }),
+      ]);
+      return 'bounced';
+    }
 
     // Advance to the next step (or finish).
     const nextStep = steps[row.currentStep + 1];

@@ -20,6 +20,21 @@ export interface SendResult {
   messageId: string;
   accepted: string[];
   rejected: string[];
+  /** True when the recipient was permanently rejected (SMTP 5xx at RCPT TO) —
+   * a hard bounce, distinct from a transient failure that's worth retrying. */
+  bounced?: boolean;
+  bounceReason?: string;
+}
+
+const PERMANENT_BOUNCE_HINTS =
+  /no such user|user unknown|mailbox unavailable|does not exist|invalid recipient|recipient rejected|address rejected|mailbox not found/i;
+
+/** SMTP 5xx = permanent failure (bounce). 4xx = transient (worth retrying). */
+function isPermanentSmtpFailure(e: unknown): boolean {
+  const responseCode = (e as { responseCode?: number })?.responseCode;
+  if (typeof responseCode === 'number') return responseCode >= 500 && responseCode < 600;
+  const message = e instanceof Error ? e.message : String(e);
+  return PERMANENT_BOUNCE_HINTS.test(message);
 }
 
 /**
@@ -99,6 +114,21 @@ export class MailSenderService {
       };
     } catch (e) {
       const message = e instanceof Error ? e.message : 'SMTP send failed';
+
+      // A permanent rejection is a bounce, not a mailbox/transport problem —
+      // don't mark the MAILBOX as errored, just report it to the caller so the
+      // campaign sender can suppress the recipient instead of retrying forever.
+      if (isPermanentSmtpFailure(e)) {
+        this.logger.warn(`bounce via ${mailbox.email} -> ${msg.to}: ${message}`);
+        return {
+          messageId: '',
+          accepted: [],
+          rejected: [msg.to],
+          bounced: true,
+          bounceReason: message.slice(0, 300),
+        };
+      }
+
       await this.prisma.mailbox.update({
         where: { id: mailbox.id },
         data: { status: 'ERROR', lastError: message.slice(0, 500) },
