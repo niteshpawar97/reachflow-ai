@@ -6,11 +6,18 @@ import { PersonalizationModule } from '../personalization/personalization.module
 import { CampaignsController } from './campaigns.controller';
 import { CampaignsService } from './campaigns.service';
 import { CampaignSenderService } from './campaign-sender.service';
+import { CampaignAutoSendService } from './campaign-auto-send.service';
 
 @Module({
   imports: [MailboxModule, PersonalizationModule],
   controllers: [CampaignsController],
-  providers: [CampaignsService, CampaignSenderService, JwtAuthGuard, WorkspaceGuard],
+  providers: [
+    CampaignsService,
+    CampaignSenderService,
+    CampaignAutoSendService,
+    JwtAuthGuard,
+    WorkspaceGuard,
+  ],
   exports: [CampaignSenderService],
 })
 export class CampaignsModule {}
