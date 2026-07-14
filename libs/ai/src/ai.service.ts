@@ -1,4 +1,5 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { loadAiConfig, type AiConfig, type AiProviderName } from './ai.config';
 import type { AiCompletionRequest, AiProvider, AiResult, AiTier } from './ai.interface';
 import { GeminiProvider } from './providers/gemini.provider';
@@ -15,6 +16,8 @@ export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly config: AiConfig;
   private readonly providers: Record<Exclude<AiProviderName, 'none'>, AiProvider>;
+  private readonly cache = new Map<string, { expiresAt: number; value: AiResult }>();
+  private readonly inFlight = new Map<string, Promise<AiResult>>();
 
   constructor() {
     this.config = loadAiConfig();
@@ -66,23 +69,70 @@ export class AiService {
       );
     }
 
-    const startedAt = Date.now();
-    try {
-      const result = await active.complete(request);
-      this.logger.log(
-        `ai ${result.provider}/${result.model} tier=${request.tier ?? 'balanced'} ` +
-          `in=${result.usage.inputTokens} out=${result.usage.outputTokens} ` +
-          `~$${result.usage.estimatedCostUsd.toFixed(6)} ${Date.now() - startedAt}ms`,
-      );
-      return result;
-    } catch (e) {
-      this.logger.error(
-        `ai ${active.name} failed after ${Date.now() - startedAt}ms: ${
-          e instanceof Error ? e.message : e
-        }`,
-      );
-      throw e;
+    const cacheKey = this.cacheKey(active.name, request);
+    const cached = this.cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      this.logger.log(`ai cache hit ${active.name}/${request.tier ?? 'balanced'}`);
+      return cached.value;
     }
+
+    const pending = this.inFlight.get(cacheKey);
+    if (pending) {
+      return pending;
+    }
+
+    const startedAt = Date.now();
+    const promise = active
+      .complete(request)
+      .then((result) => {
+        this.logger.log(
+          `ai ${result.provider}/${result.model} tier=${request.tier ?? 'balanced'} ` +
+            `in=${result.usage.inputTokens} out=${result.usage.outputTokens} ` +
+            `~$${result.usage.estimatedCostUsd.toFixed(6)} ${Date.now() - startedAt}ms`,
+        );
+        this.cache.set(cacheKey, {
+          expiresAt: Date.now() + this.config.cacheTtlMs,
+          value: result,
+        });
+        return result;
+      })
+      .catch((e) => {
+        this.logger.error(
+          `ai ${active.name} failed after ${Date.now() - startedAt}ms: ${
+            e instanceof Error ? e.message : e
+          }`,
+        );
+        throw e;
+      })
+      .finally(() => {
+        this.inFlight.delete(cacheKey);
+      });
+
+    this.inFlight.set(cacheKey, promise);
+    return promise;
+  }
+
+  async completeMany(
+    requests: AiCompletionRequest[],
+    opts: { concurrency?: number } = {},
+  ): Promise<AiResult[]> {
+    const concurrency = Math.max(1, opts.concurrency ?? 3);
+    const results: AiResult[] = new Array(requests.length);
+    let nextIndex = 0;
+
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        if (currentIndex >= requests.length) {
+          return;
+        }
+        results[currentIndex] = await this.complete(requests[currentIndex]!);
+      }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(concurrency, requests.length) }, () => worker()));
+    return results;
   }
 
   /** Convenience one-shot: a system prompt + a single user message. */
@@ -97,5 +147,19 @@ export class AiService {
       maxTokens: opts.maxTokens,
       temperature: opts.temperature,
     });
+  }
+
+  private cacheKey(provider: string, request: AiCompletionRequest): string {
+    const fingerprint = JSON.stringify({
+      provider,
+      tier: request.tier ?? 'balanced',
+      system: request.system ?? '',
+      messages: request.messages,
+      maxTokens: request.maxTokens ?? 1024,
+      temperature: request.temperature ?? null,
+      thinking: request.thinking ?? false,
+      model: request.model ?? '',
+    });
+    return createHash('sha256').update(fingerprint).digest('hex');
   }
 }

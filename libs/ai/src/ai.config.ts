@@ -12,6 +12,7 @@ export interface AiConfig {
   provider: AiProviderName;
   gemini: ProviderModelConfig;
   claude: ProviderModelConfig;
+  cacheTtlMs: number;
 }
 
 // Sensible defaults per vendor. Override any of these via env if needed.
@@ -41,6 +42,7 @@ function normalizeProvider(raw: string | undefined): AiProviderName {
 export function loadAiConfig(env: NodeJS.ProcessEnv = process.env): AiConfig {
   return {
     provider: normalizeProvider(env.AI_PROVIDER),
+    cacheTtlMs: Number(env.AI_CACHE_TTL_MS ?? 300000),
     gemini: {
       apiKey: env.GEMINI_API_KEY,
       models: {

@@ -69,6 +69,55 @@ export class LeadsService {
     });
   }
 
+  async generateEmailBatch(workspaceId: string, leadIds: string[]) {
+    const leads = await this.prisma.lead.findMany({
+      where: { workspaceId, deletedAt: null, id: { in: leadIds } },
+      include: { company: true, contact: true, score: true },
+    });
+
+    if (leads.length !== leadIds.length) {
+      throw new NotFoundException('One or more leads were not found');
+    }
+
+    const audits = await this.prisma.websiteAudit.findMany({
+      where: { workspaceId, companyId: { in: leads.map((lead) => lead.companyId) } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const draftBundle = await this.personalization.generateMany(
+      leads.map((lead) => ({
+        company: lead.company,
+        contact: lead.contact,
+        audit: audits.find((audit) => audit.companyId === lead.companyId) ?? null,
+        score: lead.score,
+      })),
+    );
+
+    const created = [] as Array<unknown>;
+    for (let index = 0; index < leads.length; index += 1) {
+      const lead = leads[index]!;
+      const draft = draftBundle[index]!;
+      created.push(
+        await this.prisma.emailDraft.create({
+          data: {
+            workspaceId,
+            leadId: lead.id,
+            subject: draft.subject,
+            body: draft.body,
+            provider: draft.provider,
+            model: draft.model,
+            tier: draft.tier,
+            inputTokens: draft.inputTokens,
+            outputTokens: draft.outputTokens,
+            costUsd: draft.costUsd,
+          },
+        }),
+      );
+    }
+
+    return created;
+  }
+
   /** List generated email drafts for a lead, newest first. */
   async listEmails(workspaceId: string, leadId: string) {
     await this.get(workspaceId, leadId); // scoped existence check
@@ -76,6 +125,14 @@ export class LeadsService {
       where: { workspaceId, leadId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async approveEmail(workspaceId: string, leadId: string, emailId: string) {
+    return this.reviewEmail(workspaceId, leadId, emailId, 'APPROVED');
+  }
+
+  async rejectEmail(workspaceId: string, leadId: string, emailId: string) {
+    return this.reviewEmail(workspaceId, leadId, emailId, 'REJECTED');
   }
 
   /** Verify the lead's contact email; caches result + updates contact status (M36). */
@@ -268,6 +325,25 @@ export class LeadsService {
         }
         throw e;
       }
+    });
+  }
+
+  private async reviewEmail(
+    workspaceId: string,
+    leadId: string,
+    emailId: string,
+    status: 'APPROVED' | 'REJECTED',
+  ) {
+    await this.get(workspaceId, leadId);
+    const draft = await this.prisma.emailDraft.findFirst({
+      where: { id: emailId, workspaceId, leadId, deletedAt: null },
+    });
+    if (!draft) {
+      throw new NotFoundException('Email draft not found');
+    }
+    return this.prisma.emailDraft.update({
+      where: { id: draft.id },
+      data: { status, reviewedAt: new Date() },
     });
   }
 

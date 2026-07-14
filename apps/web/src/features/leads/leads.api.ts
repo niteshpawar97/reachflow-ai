@@ -26,6 +26,7 @@ export interface LeadContact {
   name: string | null;
   email: string | null;
   title: string | null;
+  emailStatus: 'UNKNOWN' | 'VALID' | 'INVALID' | 'RISKY' | 'CATCH_ALL';
 }
 
 export interface Lead {
@@ -84,6 +85,7 @@ export async function importLeadsCsv(csv: string): Promise<ImportResult> {
 
 export interface EmailDraft {
   id: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
   subject: string;
   body: string;
   provider: string;
@@ -93,6 +95,7 @@ export interface EmailDraft {
   outputTokens: number;
   costUsd: string | number;
   createdAt: string;
+  reviewedAt: string | null;
 }
 
 export async function generateLeadEmail(id: string): Promise<EmailDraft> {
@@ -102,5 +105,15 @@ export async function generateLeadEmail(id: string): Promise<EmailDraft> {
 
 export async function listLeadEmails(id: string): Promise<EmailDraft[]> {
   const { data } = await api.get<EmailDraft[]>(`/leads/${id}/email`);
+  return data;
+}
+
+export async function approveLeadEmail(leadId: string, emailId: string): Promise<EmailDraft> {
+  const { data } = await api.post<EmailDraft>(`/leads/${leadId}/email/${emailId}/approve`);
+  return data;
+}
+
+export async function rejectLeadEmail(leadId: string, emailId: string): Promise<EmailDraft> {
+  const { data } = await api.post<EmailDraft>(`/leads/${leadId}/email/${emailId}/reject`);
   return data;
 }

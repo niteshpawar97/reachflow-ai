@@ -37,3 +37,8 @@ export const ListLeadsQuerySchema = z.object({
   cursor: z.string().uuid().optional(),
 });
 export type ListLeadsQuery = z.infer<typeof ListLeadsQuerySchema>;
+
+export const BulkEmailSchema = z.object({
+  leadIds: z.array(z.string().uuid()).min(1).max(50),
+});
+export type BulkEmailDto = z.infer<typeof BulkEmailSchema>;

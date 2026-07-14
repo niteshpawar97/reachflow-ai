@@ -10,7 +10,7 @@ async function bootstrap(): Promise<void> {
   });
   await app.init();
 
-  Logger.log('Worker started — no queues registered yet (Milestone 10).', 'Worker');
+  Logger.log('Worker started — due-send scheduler and sender active.', 'Worker');
 
   const shutdown = async (signal: string): Promise<void> => {
     Logger.log(`Received ${signal}, shutting down worker...`, 'Worker');

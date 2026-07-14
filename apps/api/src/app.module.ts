@@ -9,8 +9,10 @@ import { PrismaModule } from '@reachflow/database';
 import { AiModule } from '@reachflow/ai';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { AuthModule } from './modules/auth/auth.module';
+import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { HealthModule } from './modules/health/health.module';
 import { LeadsModule } from './modules/leads/leads.module';
+import { TrackingModule } from './modules/tracking/tracking.module';
 import { WorkspaceModule } from './modules/workspace/workspace.module';
 
 @Module({
@@ -45,7 +47,9 @@ import { WorkspaceModule } from './modules/workspace/workspace.module';
     HealthModule,
     WorkspaceModule,
     AuthModule,
+    CampaignsModule,
     LeadsModule,
+    TrackingModule,
   ],
   providers: [
     {

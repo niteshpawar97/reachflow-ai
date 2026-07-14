@@ -2,12 +2,14 @@ import { useState, type ReactNode } from 'react';
 import { extractApiError } from '../lib/api';
 import type { EmailDraft, ImportResult, Lead, LeadStatus } from '../features/leads/leads.api';
 import {
+  useApproveLeadEmail,
   useCreateLead,
   useDeleteLead,
   useGenerateEmail,
   useImportLeads,
   useLeadEmails,
   useLeads,
+  useRejectLeadEmail,
   useUpdateLeadStatus,
 } from '../features/leads/useLeads';
 
@@ -249,6 +251,8 @@ function LeadDrawer({
 function EmailSection({ lead }: { lead: Lead }) {
   const { data: emails, isLoading } = useLeadEmails(lead.id);
   const generate = useGenerateEmail(lead.id);
+  const approve = useApproveLeadEmail(lead.id);
+  const reject = useRejectLeadEmail(lead.id);
   const [err, setErr] = useState<string | null>(null);
 
   const run = async (): Promise<void> => {
@@ -280,15 +284,33 @@ function EmailSection({ lead }: { lead: Lead }) {
 
       <div className="space-y-3">
         {emails?.map((e) => (
-          <EmailCard key={e.id} email={e} />
+          <EmailCard
+            key={e.id}
+            email={e}
+            onApprove={async () => {
+              await approve.mutateAsync(e.id);
+            }}
+            onReject={async () => {
+              await reject.mutateAsync(e.id);
+            }}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function EmailCard({ email }: { email: EmailDraft }) {
+function EmailCard({
+  email,
+  onApprove,
+  onReject,
+}: {
+  email: EmailDraft;
+  onApprove: () => Promise<void>;
+  onReject: () => Promise<void>;
+}) {
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
 
   const copy = async (): Promise<void> => {
     await navigator.clipboard.writeText(`Subject: ${email.subject}\n\n${email.body}`);
@@ -296,20 +318,69 @@ function EmailCard({ email }: { email: EmailDraft }) {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const runReview = async (next: 'approve' | 'reject'): Promise<void> => {
+    setBusy(next);
+    try {
+      if (next === 'approve') {
+        await onApprove();
+      } else {
+        await onReject();
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const cost = Number(email.costUsd);
+  const statusClass =
+    email.status === 'APPROVED'
+      ? 'bg-green-500/20 text-green-300'
+      : email.status === 'REJECTED'
+        ? 'bg-red-500/20 text-red-300'
+        : 'bg-amber-500/20 text-amber-300';
 
   return (
     <div className="rounded-lg border border-surface-border bg-surface p-3">
-      <div className="mb-1 text-xs font-medium text-slate-400">Subject</div>
-      <div className="mb-2 text-sm font-medium text-slate-100">{email.subject}</div>
-      <div className="whitespace-pre-wrap text-sm text-slate-300">{email.body}</div>
-      <div className="mt-3 flex items-center justify-between border-t border-surface-border pt-2">
-        <span className="text-[11px] text-slate-500">
-          {email.provider}/{email.model} · {email.outputTokens} tok · ~${cost.toFixed(4)}
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div>
+          <div className="mb-1 text-xs font-medium text-slate-400">Subject</div>
+          <div className="text-sm font-medium text-slate-100">{email.subject}</div>
+        </div>
+        <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${statusClass}`}>
+          {email.status}
         </span>
-        <button className="btn-ghost py-1 text-xs" onClick={() => void copy()}>
-          {copied ? 'Copied ✓' : 'Copy'}
-        </button>
+      </div>
+      <div className="whitespace-pre-wrap text-sm text-slate-300">{email.body}</div>
+      <div className="mt-3 border-t border-surface-border pt-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[11px] text-slate-500">
+            {email.provider}/{email.model} · {email.outputTokens} tok · ~${cost.toFixed(4)}
+          </span>
+          <div className="flex gap-2">
+            <button className="btn-ghost py-1 text-xs" onClick={() => void copy()}>
+              {copied ? 'Copied ✓' : 'Copy'}
+            </button>
+            <button
+              className="btn-ghost py-1 text-xs text-green-300"
+              disabled={busy !== null}
+              onClick={() => void runReview('approve')}
+            >
+              {busy === 'approve' ? 'Approving…' : 'Approve'}
+            </button>
+            <button
+              className="btn-ghost py-1 text-xs text-red-300"
+              disabled={busy !== null}
+              onClick={() => void runReview('reject')}
+            >
+              {busy === 'reject' ? 'Rejecting…' : 'Reject'}
+            </button>
+          </div>
+        </div>
+        {email.reviewedAt && (
+          <div className="mt-1 text-[11px] text-slate-500">
+            Reviewed {new Date(email.reviewedAt).toLocaleString()}
+          </div>
+        )}
       </div>
     </div>
   );

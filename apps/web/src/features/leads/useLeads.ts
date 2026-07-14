@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useWorkspaceStore } from '../../store/workspace.store';
 import {
+  approveLeadEmail,
   createLead,
   deleteLead,
   generateLeadEmail,
   importLeadsCsv,
   listLeadEmails,
   listLeads,
+  rejectLeadEmail,
   updateLeadStatus,
   type CreateLeadPayload,
   type LeadStatus,
@@ -67,6 +69,22 @@ export function useGenerateEmail(leadId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => generateLeadEmail(leadId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-emails'] }),
+  });
+}
+
+export function useApproveLeadEmail(leadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (emailId: string) => approveLeadEmail(leadId, emailId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-emails'] }),
+  });
+}
+
+export function useRejectLeadEmail(leadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (emailId: string) => rejectLeadEmail(leadId, emailId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-emails'] }),
   });
 }

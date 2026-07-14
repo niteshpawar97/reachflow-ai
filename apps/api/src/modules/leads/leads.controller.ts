@@ -18,9 +18,11 @@ import { WorkspaceId } from '../../common/workspace-context.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CreateLeadSchema,
+  BulkEmailSchema,
   ListLeadsQuerySchema,
   UpdateLeadSchema,
   type CreateLeadDto,
+  type BulkEmailDto,
   type ListLeadsQuery,
   type UpdateLeadDto,
 } from './dto/lead.dto';
@@ -97,12 +99,38 @@ export class LeadsController {
     return this.leads.generateEmail(workspaceId, id);
   }
 
+  @Post('email/batch')
+  generateEmailBatch(
+    @WorkspaceId() workspaceId: string,
+    @Body(new ZodValidationPipe(BulkEmailSchema)) dto: BulkEmailDto,
+  ): Promise<unknown> {
+    return this.leads.generateEmailBatch(workspaceId, dto.leadIds);
+  }
+
   @Get(':id/email')
   listEmails(
     @WorkspaceId() workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<unknown> {
     return this.leads.listEmails(workspaceId, id);
+  }
+
+  @Post(':id/email/:emailId/approve')
+  approveEmail(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('emailId', ParseUUIDPipe) emailId: string,
+  ): Promise<unknown> {
+    return this.leads.approveEmail(workspaceId, id, emailId);
+  }
+
+  @Post(':id/email/:emailId/reject')
+  rejectEmail(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('emailId', ParseUUIDPipe) emailId: string,
+  ): Promise<unknown> {
+    return this.leads.rejectEmail(workspaceId, id, emailId);
   }
 
   @Post(':id/score')

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Company, Contact, LeadScore, WebsiteAudit } from '@reachflow/database';
 import { AiService } from '@reachflow/ai';
 
@@ -17,6 +17,13 @@ export interface GeneratedEmail {
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+}
+
+export interface PersonalizationItem {
+  company: Company;
+  contact: Contact | null;
+  audit: WebsiteAudit | null;
+  score: LeadScore | null;
 }
 
 /**
@@ -45,6 +52,24 @@ const SYSTEM_PROMPT = [
   '<email body>',
 ].join('\n');
 
+const SPAM_WORDS = [
+  'guarantee',
+  'guaranteed',
+  'free money',
+  'act now',
+  'limited time',
+  'winner',
+  'click here',
+  'buy now',
+  'urgent',
+  'risk free',
+];
+
+interface DraftValidationResult {
+  ok: boolean;
+  reasons: string[];
+}
+
 @Injectable()
 export class PersonalizationService {
   constructor(private readonly ai: AiService) {}
@@ -60,26 +85,67 @@ export class PersonalizationService {
     audit: WebsiteAudit | null,
     score: LeadScore | null,
   ): Promise<GeneratedEmail> {
-    const userPrompt = this.buildFacts(company, contact, audit, score);
+    const drafts = await this.generateMany([{ company, contact, audit, score }]);
+    const result = drafts[0];
+    if (!result) {
+      throw new BadRequestException('No AI draft was generated');
+    }
+    return result;
+  }
 
-    const result = await this.ai.generateText(userPrompt, {
-      system: SYSTEM_PROMPT,
-      tier: 'balanced',
-      maxTokens: 600,
-      temperature: 0.8,
-    });
+  async generateMany(items: PersonalizationItem[]): Promise<GeneratedEmail[]> {
+    if (items.length === 0) {
+      return [];
+    }
 
-    const { subject, body } = this.parse(result.text);
-    return {
-      subject,
-      body,
-      provider: result.provider,
-      model: result.model,
-      tier: 'balanced',
-      inputTokens: result.usage.inputTokens,
-      outputTokens: result.usage.outputTokens,
-      costUsd: result.usage.estimatedCostUsd,
-    };
+    const firstPass = await this.ai.completeMany(
+      items.map((item) => ({
+        messages: [{ role: 'user', content: this.buildFacts(item.company, item.contact, item.audit, item.score) }],
+        system: SYSTEM_PROMPT,
+        tier: 'balanced',
+        maxTokens: 600,
+        temperature: 0.8,
+      })),
+    );
+
+    const results: GeneratedEmail[] = [];
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index]!;
+      const first = firstPass[index]!;
+      let chosen = first;
+      const validation = this.validateDraft(first.text);
+
+      if (!validation.ok) {
+        const retry = await this.ai.generateText(this.buildFacts(item.company, item.contact, item.audit, item.score), {
+          system: `${SYSTEM_PROMPT}\n\nIf any draft line is speculative, remove it. Do not add claims not present in the evidence.`,
+          tier: 'balanced',
+          maxTokens: 600,
+          temperature: 0.4,
+        });
+        const retryValidation = this.validateDraft(retry.text);
+        if (retryValidation.ok) {
+          chosen = retry;
+        } else {
+          throw new BadRequestException(
+            `AI draft failed validation after retry: ${Array.from(new Set([...validation.reasons, ...retryValidation.reasons])).join('; ')}`,
+          );
+        }
+      }
+
+      const { subject, body } = this.parse(chosen.text);
+      results.push({
+        subject,
+        body,
+        provider: chosen.provider,
+        model: chosen.model,
+        tier: 'balanced',
+        inputTokens: chosen.usage.inputTokens,
+        outputTokens: chosen.usage.outputTokens,
+        costUsd: chosen.usage.estimatedCostUsd,
+      });
+    }
+
+    return results;
   }
 
   /** Assemble the grounded, human-readable fact sheet the model writes from. */
@@ -161,5 +227,41 @@ export class PersonalizationService {
     const parts = trimmed.split('\n');
     const subject = (parts.shift() ?? 'Quick idea for your website').trim();
     return { subject, body: parts.join('\n').trim() || trimmed };
+  }
+
+  private validateDraft(text: string): DraftValidationResult {
+    const trimmed = text.trim();
+    const { subject, body } = this.parse(trimmed);
+    const reasons: string[] = [];
+
+    const subjectWords = subject.split(/\s+/).filter(Boolean).length;
+    const bodyWords = body.split(/\s+/).filter(Boolean).length;
+
+    if (subject.length > 60) {
+      reasons.push('subject exceeds 60 characters');
+    }
+    if (subjectWords < 2) {
+      reasons.push('subject is too short');
+    }
+    if (bodyWords < 60 || bodyWords > 110) {
+      reasons.push(`body is outside 60-110 words (${bodyWords})`);
+    }
+
+    const haystack = `${subject} ${body}`.toLowerCase();
+    for (const word of SPAM_WORDS) {
+      if (haystack.includes(word)) {
+        reasons.push(`contains spam phrase: ${word}`);
+      }
+    }
+
+    if (/\b(best regards|kind regards|sincerely)\b/i.test(trimmed)) {
+      reasons.push('contains a forbidden signature line');
+    }
+
+    if (!/\bwebsite\b|\bmobile\b|\bload\b|\bperformance\b|\bcontact\b|\bCTA\b/i.test(trimmed)) {
+      reasons.push('missing a grounded website observation');
+    }
+
+    return { ok: reasons.length === 0, reasons };
   }
 }

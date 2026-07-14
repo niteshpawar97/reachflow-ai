@@ -78,6 +78,9 @@ model Workspace {
   companies     Company[]
   contacts      Contact[]
   leads         Lead[]
+  campaigns     Campaign[]
+  campaignSteps CampaignStep[]
+  campaignLeads CampaignLead[]
   websiteAudits      WebsiteAudit[]
   leadScores         LeadScore[]
   emailVerifications EmailVerification[]
@@ -234,6 +237,7 @@ model Lead {
   contact   Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
   score     LeadScore?
   emails    EmailDraft[]
+  campaignLeads CampaignLead[]
 
   @@unique([workspaceId, source, sourceKey])
   @@index([workspaceId, status])
@@ -290,6 +294,45 @@ enum AuditStatus {
   FAILED
 }
 
+enum EmailDraftStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  STOPPED
+  COMPLETED
+}
+
+enum CampaignStepMode {
+  AI
+  FIXED
+}
+
+enum CampaignStepTrigger {
+  SEND
+  NO_REPLY
+  OPENED
+  CLICKED
+  REPLIED
+}
+
+enum CampaignLeadStatus {
+  PENDING
+  QUEUED
+  SENDING
+  SENT
+  OPENED
+  REPLIED
+  BOUNCED
+  SKIPPED
+  STOPPED
+}
+
 // Result of analyzing a company's website — the evidence that powers
 // audit-driven personalization. AI narrative summary added in M35.
 model WebsiteAudit {
@@ -330,6 +373,7 @@ model EmailDraft {
   id           String   @id @default(uuid()) @db.Uuid
   workspaceId  String   @map("workspace_id") @db.Uuid
   leadId       String   @map("lead_id") @db.Uuid
+  status       EmailDraftStatus @default(PENDING)
   subject      String
   body         String   @db.Text
   provider     String
@@ -339,6 +383,7 @@ model EmailDraft {
   outputTokens Int      @default(0) @map("output_tokens")
   costUsd      Decimal  @default(0) @map("cost_usd") @db.Decimal(12, 6)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz(6)
   deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -346,4 +391,90 @@ model EmailDraft {
 
   @@index([workspaceId, leadId])
   @@map("email_drafts")
+}
+
+// Campaign builder core (M44). A campaign is a sequenced outreach container
+// with a workspace-scoped offer, schedule, mailbox pool, and daily cap.
+model Campaign {
+  id              String         @id @default(uuid()) @db.Uuid
+  workspaceId     String         @map("workspace_id") @db.Uuid
+  name            String
+  offer           String         @db.Text
+  status          CampaignStatus @default(DRAFT)
+  timezone        String         @default("UTC")
+  schedule        Json?          @map("schedule")
+  mailboxPool     Json?          @map("mailbox_pool")
+  dailyCap        Int            @default(0) @map("daily_cap")
+  launchedAt      DateTime?      @map("launched_at") @db.Timestamptz(6)
+  pausedAt        DateTime?      @map("paused_at") @db.Timestamptz(6)
+  stoppedAt       DateTime?      @map("stopped_at") @db.Timestamptz(6)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz(6)
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  steps     CampaignStep[]
+  leads     CampaignLead[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, deletedAt])
+  @@map("campaigns")
+}
+
+// Sequence step within a campaign. Supports both AI-generated and fixed copy,
+// plus trigger + delay so later scheduler/follow-up milestones can reuse it.
+model CampaignStep {
+  id            String              @id @default(uuid()) @db.Uuid
+  workspaceId   String              @map("workspace_id") @db.Uuid
+  campaignId    String              @map("campaign_id") @db.Uuid
+  position      Int
+  mode          CampaignStepMode    @default(AI)
+  trigger       CampaignStepTrigger @default(SEND)
+  delayMinutes  Int                 @default(0) @map("delay_minutes")
+  subject       String?
+  body          String?             @db.Text
+  aiPrompt      String?             @map("ai_prompt") @db.Text
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, position])
+  @@index([workspaceId, campaignId])
+  @@map("campaign_steps")
+}
+
+// Lead-to-campaign assignment and execution state. This is what the scheduler
+// and sender advance as the sequence runs.
+model CampaignLead {
+  id            String             @id @default(uuid()) @db.Uuid
+  workspaceId   String             @map("workspace_id") @db.Uuid
+  campaignId    String             @map("campaign_id") @db.Uuid
+  leadId        String             @map("lead_id") @db.Uuid
+  status        CampaignLeadStatus @default(PENDING)
+  currentStep   Int                @default(0) @map("current_step")
+  nextSendAt    DateTime?          @map("next_send_at") @db.Timestamptz(6)
+  lastSentAt    DateTime?          @map("last_sent_at") @db.Timestamptz(6)
+  lastEventAt   DateTime?          @map("last_event_at") @db.Timestamptz(6)
+  trackingToken String?            @unique @map("tracking_token")
+  openedAt      DateTime?          @map("opened_at") @db.Timestamptz(6)
+  clickedAt     DateTime?          @map("clicked_at") @db.Timestamptz(6)
+  openCount     Int                @default(0) @map("open_count")
+  clickCount    Int                @default(0) @map("click_count")
+  queuedAt      DateTime?          @map("queued_at") @db.Timestamptz(6)
+  queuedJobKey  String?            @unique @map("queued_job_key")
+  stopReason    String?            @map("stop_reason")
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, leadId])
+  @@index([workspaceId, campaignId, status])
+  @@index([workspaceId, nextSendAt])
+  @@index([workspaceId, trackingToken])
+  @@map("campaign_leads")
 }
