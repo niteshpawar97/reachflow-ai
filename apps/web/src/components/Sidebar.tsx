@@ -1,12 +1,20 @@
 import { NavLink } from 'react-router-dom';
 
-const NAV = [
+interface NavItem {
+  to: string;
+  label: string;
+  icon: string;
+  end?: boolean;
+  soon?: boolean;
+}
+
+const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: '▤', end: true },
-  { to: '/leads', label: 'Leads', icon: '◈', soon: true },
+  { to: '/leads', label: 'Leads', icon: '◈' },
   { to: '/campaigns', label: 'Campaigns', icon: '✉', soon: true },
   { to: '/inbox', label: 'Inbox', icon: '⌂', soon: true },
   { to: '/crm', label: 'CRM', icon: '⇄', soon: true },
-  { to: '/settings', label: 'Settings', icon: '⚙', end: false },
+  { to: '/settings', label: 'Settings', icon: '⚙' },
 ];
 
 export function Sidebar() {

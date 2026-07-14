@@ -4,17 +4,22 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios';
 import { useAuthStore } from '../store/auth.store';
+import { useWorkspaceStore } from '../store/workspace.store';
 import type { AuthTokens } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
 
 export const api: AxiosInstance = axios.create({ baseURL: BASE_URL });
 
-// Attach the in-memory access token to every request.
+// Attach the access token + active workspace to every request.
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = useAuthStore.getState().accessToken;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const wsId = useWorkspaceStore.getState().activeWorkspaceId;
+  if (wsId) {
+    config.headers['X-Workspace-Id'] = wsId;
   }
   return config;
 });
