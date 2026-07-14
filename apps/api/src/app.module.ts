@@ -6,6 +6,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { PrismaModule } from '@reachflow/database';
+import { AiModule } from '@reachflow/ai';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
@@ -40,6 +41,7 @@ import { WorkspaceModule } from './modules/workspace/workspace.module';
       },
     ]),
     PrismaModule,
+    AiModule,
     HealthModule,
     WorkspaceModule,
     AuthModule,
