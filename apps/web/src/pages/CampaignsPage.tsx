@@ -8,6 +8,7 @@ import {
   launchCampaign,
   pauseCampaign,
   resumeCampaign,
+  runDueSends,
   stopCampaign,
 } from '../features/campaigns/campaigns.api';
 import {
@@ -15,7 +16,12 @@ import {
   useCampaigns,
   useCreateCampaign,
 } from '../features/campaigns/useCampaigns';
-import type { CampaignStepMode, CampaignStepTrigger } from '../features/campaigns/campaigns.api';
+import type {
+  CampaignStepMode,
+  CampaignStepTrigger,
+  RunDueResult,
+} from '../features/campaigns/campaigns.api';
+import { useMailboxes } from '../features/mailboxes/useMailboxes';
 import { useQueryClient } from '@tanstack/react-query';
 
 type DraftStep = {
@@ -56,11 +62,20 @@ export function CampaignsPage() {
   const [offer, setOffer] = useState('');
   const [timezone, setTimezone] = useState('UTC');
   const [dailyCap, setDailyCap] = useState(50);
-  const [mailboxes, setMailboxes] = useState('');
+  const { data: mailboxList } = useMailboxes();
+  const [selectedMailboxIds, setSelectedMailboxIds] = useState<string[]>([]);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [steps, setSteps] = useState<DraftStep[]>([{ ...DEFAULT_STEP }]);
   const [error, setError] = useState<string | null>(null);
   const [savedCampaignId, setSavedCampaignId] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<RunDueResult | null>(null);
+
+  const toggleMailbox = (id: string): void => {
+    setSelectedMailboxIds((cur) =>
+      cur.includes(id) ? cur.filter((m) => m !== id) : [...cur, id],
+    );
+  };
 
   const readyLeads = useMemo(() => leadsData?.data ?? [], [leadsData]);
   const verifiedCount = useMemo(
@@ -100,11 +115,7 @@ export function CampaignsPage() {
         offer: offer.trim(),
         timezone: timezone.trim() || 'UTC',
         dailyCap,
-        mailboxPool: mailboxes
-          .split(',')
-          .map((entry) => entry.trim())
-          .filter(Boolean)
-          .map((email) => ({ email, healthy: true })),
+        mailboxPool: selectedMailboxIds.map((id) => ({ id, healthy: true })),
         schedule: { mode: 'manual' },
       });
 
@@ -200,8 +211,26 @@ export function CampaignsPage() {
             <Field label="Daily cap">
               <input className="input" type="number" min={1} max={500} value={dailyCap} onChange={(e) => setDailyCap(Number(e.target.value))} />
             </Field>
-            <Field label="Mailbox pool (comma-separated emails)">
-              <textarea className="input h-28" value={mailboxes} onChange={(e) => setMailboxes(e.target.value)} placeholder="ops@company.com, sales@company.com" />
+            <Field label="Mailbox pool (sends rotate across selected)">
+              <div className="max-h-28 space-y-1 overflow-y-auto rounded-lg border border-surface-border bg-white/5 p-2">
+                {mailboxList?.length ? (
+                  mailboxList.map((mb) => (
+                    <label key={mb.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-white/5">
+                      <input
+                        type="checkbox"
+                        checked={selectedMailboxIds.includes(mb.id)}
+                        onChange={() => toggleMailbox(mb.id)}
+                      />
+                      <span className="text-slate-200">{mb.email}</span>
+                      <span className="text-[11px] text-slate-500">{mb.status}</span>
+                    </label>
+                  ))
+                ) : (
+                  <p className="px-1 py-2 text-xs text-slate-500">
+                    No mailboxes yet — add one on the Mailboxes page first.
+                  </p>
+                )}
+              </div>
             </Field>
             <Field label="Launch mode">
               <div className="rounded-lg border border-surface-border bg-white/5 p-3 text-sm text-slate-400">
@@ -344,14 +373,39 @@ export function CampaignsPage() {
               <p className="text-sm text-slate-400">Validate and manage the currently selected campaign.</p>
             </div>
             {activeCampaign && (
-              <div className="flex gap-2">
-                <button className="btn-ghost py-1 text-xs" onClick={() => void pauseCampaign(activeCampaign.id)}>Pause</button>
-                <button className="btn-ghost py-1 text-xs" onClick={() => void resumeCampaign(activeCampaign.id)}>Resume</button>
-                <button className="btn-ghost py-1 text-xs text-red-300" onClick={() => void stopCampaign(activeCampaign.id)}>Stop</button>
-                <button className="btn-primary py-1 text-xs" onClick={() => void launchCampaign(activeCampaign.id)}>Launch</button>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-ghost py-1 text-xs" onClick={() => void pauseCampaign(activeCampaign.id).then(() => qc.invalidateQueries({ queryKey: ['campaigns'] }))}>Pause</button>
+                <button className="btn-ghost py-1 text-xs" onClick={() => void resumeCampaign(activeCampaign.id).then(() => qc.invalidateQueries({ queryKey: ['campaigns'] }))}>Resume</button>
+                <button className="btn-ghost py-1 text-xs text-red-300" onClick={() => void stopCampaign(activeCampaign.id).then(() => qc.invalidateQueries({ queryKey: ['campaigns'] }))}>Stop</button>
+                <button className="btn-primary py-1 text-xs" onClick={() => void launchCampaign(activeCampaign.id).then(() => qc.invalidateQueries({ queryKey: ['campaigns'] }))}>Launch</button>
+                <button
+                  className="btn-ghost py-1 text-xs"
+                  disabled={running}
+                  title="Send all currently-due emails now (the scheduler also does this automatically)"
+                  onClick={() => {
+                    setRunning(true);
+                    setRunResult(null);
+                    void runDueSends()
+                      .then((r) => setRunResult(r))
+                      .catch((e) => setError(extractApiError(e)))
+                      .finally(() => {
+                        setRunning(false);
+                        void qc.invalidateQueries({ queryKey: ['campaigns'] });
+                      });
+                  }}
+                >
+                  {running ? 'Sending…' : 'Run now'}
+                </button>
               </div>
             )}
           </div>
+
+          {runResult && (
+            <p className="rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-300">
+              Sent {runResult.sent} · skipped {runResult.skipped} · failed {runResult.failed}
+              {runResult.errors.length > 0 && ` — ${runResult.errors[0]?.message}`}
+            </p>
+          )}
 
           {activeCampaign ? (
             <div className="grid gap-3 md:grid-cols-3">

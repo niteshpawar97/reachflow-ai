@@ -169,3 +169,16 @@ export async function stopCampaign(id: string): Promise<CampaignSummary> {
   const { data } = await api.post<CampaignSummary>(`/campaigns/${id}/stop`);
   return data;
 }
+
+export interface RunDueResult {
+  processed: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  errors: Array<{ campaignLeadId: string; message: string }>;
+}
+
+export async function runDueSends(): Promise<RunDueResult> {
+  const { data } = await api.post<RunDueResult>('/campaigns/due-sends/run');
+  return data;
+}
