@@ -10,6 +10,7 @@ import { AiModule } from '@reachflow/ai';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { AuthModule } from './modules/auth/auth.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DealsModule } from './modules/deals/deals.module';
 import { DiscoveryModule } from './modules/discovery/discovery.module';
@@ -52,6 +53,7 @@ import { WorkspaceModule } from './modules/workspace/workspace.module';
     AiModule,
     HealthModule,
     WorkspaceModule,
+    AnalyticsModule,
     AuthModule,
     CampaignsModule,
     DashboardModule,

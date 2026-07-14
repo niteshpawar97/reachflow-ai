@@ -5,6 +5,7 @@ import { LoginPage } from './features/auth/LoginPage';
 import { RegisterPage } from './features/auth/RegisterPage';
 import { useAuthBootstrap } from './features/auth/useAuth';
 import { DashboardPage } from './pages/DashboardPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 import { CampaignsPage } from './pages/CampaignsPage';
 import { CRMPage } from './pages/CRMPage';
 import { InboxPage } from './pages/InboxPage';
@@ -33,6 +34,7 @@ export function App() {
           <Route path="/mailboxes" element={<MailboxesPage />} />
           <Route path="/inbox" element={<InboxPage />} />
           <Route path="/crm" element={<CRMPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
