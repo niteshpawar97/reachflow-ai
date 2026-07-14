@@ -89,6 +89,22 @@ export class LeadsController {
     return this.leads.verifyLeadEmail(workspaceId, id);
   }
 
+  @Post(':id/email')
+  generateEmail(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<unknown> {
+    return this.leads.generateEmail(workspaceId, id);
+  }
+
+  @Get(':id/email')
+  listEmails(
+    @WorkspaceId() workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<unknown> {
+    return this.leads.listEmails(workspaceId, id);
+  }
+
   @Post(':id/score')
   score(
     @WorkspaceId() workspaceId: string,

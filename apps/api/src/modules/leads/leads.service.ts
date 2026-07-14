@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import { WebsiteAnalyzerService } from '../website-analyzer/website-analyzer.service';
 import { LeadScoringService } from '../lead-scoring/lead-scoring.service';
 import { EmailVerificationService } from '../email-verification/email-verification.service';
+import { PersonalizationService } from '../personalization/personalization.service';
 import { CreateLeadSchema, type CreateLeadDto, type ListLeadsQuery, type UpdateLeadDto } from './dto/lead.dto';
 import { DEFAULT_MAPPING, type ImportResult } from './dto/import.dto';
 
@@ -26,7 +27,56 @@ export class LeadsService {
     private readonly analyzer: WebsiteAnalyzerService,
     private readonly scoring: LeadScoringService,
     private readonly emailVerifier: EmailVerificationService,
+    private readonly personalization: PersonalizationService,
   ) {}
+
+  /** Generate + persist an AI-personalized cold email for the lead (M39).
+   * Grounded in the lead's latest website audit + score. */
+  async generateEmail(workspaceId: string, leadId: string) {
+    const lead = await this.prisma.lead.findFirst({
+      where: { id: leadId, workspaceId, deletedAt: null },
+      include: { company: true, contact: true, score: true },
+    });
+    if (!lead) {
+      throw new NotFoundException('Lead not found');
+    }
+
+    const audit = await this.prisma.websiteAudit.findFirst({
+      where: { workspaceId, companyId: lead.companyId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const email = await this.personalization.generate(
+      lead.company,
+      lead.contact,
+      audit,
+      lead.score,
+    );
+
+    return this.prisma.emailDraft.create({
+      data: {
+        workspaceId,
+        leadId,
+        subject: email.subject,
+        body: email.body,
+        provider: email.provider,
+        model: email.model,
+        tier: email.tier,
+        inputTokens: email.inputTokens,
+        outputTokens: email.outputTokens,
+        costUsd: email.costUsd,
+      },
+    });
+  }
+
+  /** List generated email drafts for a lead, newest first. */
+  async listEmails(workspaceId: string, leadId: string) {
+    await this.get(workspaceId, leadId); // scoped existence check
+    return this.prisma.emailDraft.findMany({
+      where: { workspaceId, leadId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
   /** Verify the lead's contact email; caches result + updates contact status (M36). */
   async verifyLeadEmail(workspaceId: string, leadId: string) {

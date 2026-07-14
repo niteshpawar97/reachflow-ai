@@ -81,6 +81,7 @@ model Workspace {
   websiteAudits      WebsiteAudit[]
   leadScores         LeadScore[]
   emailVerifications EmailVerification[]
+  emailDrafts        EmailDraft[]
 
   @@index([ownerUserId])
   @@index([deletedAt])
@@ -232,6 +233,7 @@ model Lead {
   company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   contact   Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
   score     LeadScore?
+  emails    EmailDraft[]
 
   @@unique([workspaceId, source, sourceKey])
   @@index([workspaceId, status])
@@ -319,4 +321,29 @@ model WebsiteAudit {
 
   @@index([workspaceId, companyId])
   @@map("website_audits")
+}
+
+// AI-personalized cold email generated for a lead (M39). Grounded in the lead's
+// website audit + score. Provider-agnostic: records which provider/model/tier
+// produced it plus token/cost, so output is auditable across Gemini/Claude.
+model EmailDraft {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  leadId       String   @map("lead_id") @db.Uuid
+  subject      String
+  body         String   @db.Text
+  provider     String
+  model        String
+  tier         String
+  inputTokens  Int      @default(0) @map("input_tokens")
+  outputTokens Int      @default(0) @map("output_tokens")
+  costUsd      Decimal  @default(0) @map("cost_usd") @db.Decimal(12, 6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, leadId])
+  @@map("email_drafts")
 }
