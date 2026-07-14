@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma, PrismaService } from '@reachflow/database';
+import { LeadSource, Prisma, PrismaService } from '@reachflow/database';
 
 export interface DiscoveredBusiness {
   name: string;
@@ -74,8 +74,9 @@ export class BusinessDiscoveryService {
 
     for (const b of businesses) {
       const sourceKey = b.osmId;
+      const source = b.osmId.startsWith('google:') ? LeadSource.GOOGLE_MAPS : LeadSource.DIRECTORY;
       const existingLead = await this.prisma.lead.findFirst({
-        where: { workspaceId, source: 'DIRECTORY', sourceKey, deletedAt: null },
+        where: { workspaceId, source, sourceKey, deletedAt: null },
       });
       if (existingLead) {
         duplicates += 1;
@@ -116,7 +117,7 @@ export class BusinessDiscoveryService {
       }
 
       await this.prisma.lead.create({
-        data: { workspaceId, companyId: company.id, contactId, source: 'DIRECTORY', sourceKey },
+        data: { workspaceId, companyId: company.id, contactId, source, sourceKey },
       });
       imported += 1;
     }
