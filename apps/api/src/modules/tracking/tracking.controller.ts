@@ -35,4 +35,16 @@ export class TrackingController {
 
     res.redirect(HttpStatus.FOUND, target);
   }
+
+  @Get('unsubscribe/:token')
+  async unsubscribe(@Param('token') token: string, @Res() res: Response): Promise<void> {
+    const { email } = await this.tracking.recordUnsubscribe(token);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(HttpStatus.OK).send(`<!doctype html>
+<html><head><meta charset="utf-8"><title>Unsubscribed</title></head>
+<body style="font-family:sans-serif;max-width:480px;margin:80px auto;text-align:center;color:#334155">
+  <h2>You've been unsubscribed</h2>
+  <p>${email ?? 'This address'} will not receive further emails from this sender.</p>
+</body></html>`);
+  }
 }

@@ -3,7 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { CampaignLeadStatus, CampaignStatus, Prisma, PrismaService } from '@reachflow/database';
 import { MailSenderService } from '../mailbox/mail-sender.service';
 import { PersonalizationService } from '../personalization/personalization.service';
-import { injectTracking, textToHtml, trackingBaseUrl } from './tracking-inject';
+import { appendUnsubscribeFooter, injectTracking, textToHtml, trackingBaseUrl } from './tracking-inject';
+import { SuppressionService } from '../suppression/suppression.service';
 
 export interface ProcessResult {
   processed: number;
@@ -34,6 +35,7 @@ export class CampaignSenderService {
     private readonly prisma: PrismaService,
     private readonly sender: MailSenderService,
     private readonly personalization: PersonalizationService,
+    private readonly suppressions: SuppressionService,
   ) {}
 
   async processDue(workspaceId: string, limit = 25): Promise<ProcessResult> {
@@ -101,14 +103,28 @@ export class CampaignSenderService {
       return 'skipped';
     }
 
+    // Compliance: never send to a suppressed (unsubscribed/bounced/manual) address.
+    if (await this.suppressions.isSuppressed(row.workspaceId, contact.email)) {
+      await this.prisma.campaignLead.update({
+        where: { id: row.id },
+        data: {
+          status: CampaignLeadStatus.STOPPED,
+          nextSendAt: null,
+          stopReason: 'recipient is on the suppression list',
+        },
+      });
+      return 'skipped';
+    }
+
     const mailboxId = this.pickMailbox(row.campaign.mailboxPool);
 
     // Render subject + body for this step.
     const { subject, body } = await this.renderStep(row, step);
 
-    // Ensure a tracking token, inject pixel + click-wrapping.
+    // Ensure a tracking token, inject pixel + click-wrapping + unsubscribe footer.
     const token = row.trackingToken ?? randomBytes(16).toString('hex');
-    const html = injectTracking(textToHtml(body), token, trackingBaseUrl());
+    const base = trackingBaseUrl();
+    const html = appendUnsubscribeFooter(injectTracking(textToHtml(body), token, base), token, base);
 
     await this.sender.sendViaMailbox(row.workspaceId, mailboxId, {
       to: contact.email,

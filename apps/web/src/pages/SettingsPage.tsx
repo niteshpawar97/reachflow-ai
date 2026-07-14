@@ -6,6 +6,11 @@ import {
   useUpdateSettings,
   useWorkspaceSettings,
 } from '../features/workspaces/useWorkspaces';
+import {
+  useAddSuppression,
+  useRemoveSuppression,
+  useSuppressions,
+} from '../features/suppressions/useSuppressions';
 
 export function SettingsPage() {
   const ws = useActiveWorkspace();
@@ -102,6 +107,92 @@ export function SettingsPage() {
         <div className="font-mono text-sm text-slate-300">{ws.id}</div>
         <div className="mt-2 text-xs text-slate-500">Slug</div>
         <div className="font-mono text-sm text-slate-300">{ws.slug}</div>
+      </div>
+
+      <SuppressionCard />
+    </div>
+  );
+}
+
+function SuppressionCard() {
+  const { data: suppressions, isLoading } = useSuppressions();
+  const add = useAddSuppression();
+  const remove = useRemoveSuppression();
+  const [email, setEmail] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    setErr(null);
+    try {
+      await add.mutateAsync({ email: email.trim() });
+      setEmail('');
+    } catch (e2) {
+      setErr(extractApiError(e2));
+    }
+  };
+
+  const reasonClass = (r: string): string =>
+    r === 'UNSUBSCRIBED'
+      ? 'bg-amber-500/15 text-amber-300'
+      : r === 'BOUNCED'
+        ? 'bg-red-500/15 text-red-300'
+        : r === 'COMPLAINED'
+          ? 'bg-red-500/20 text-red-300'
+          : 'bg-white/10 text-slate-300';
+
+  return (
+    <div className="card">
+      <h2 className="mb-1 font-medium">Suppression list</h2>
+      <p className="mb-3 text-xs text-slate-500">
+        These addresses are never sent to — unsubscribed, bounced, or manually blocked.
+      </p>
+
+      <form onSubmit={(e) => void submit(e)} className="mb-3 flex gap-2">
+        <input
+          className="input flex-1"
+          type="email"
+          required
+          placeholder="Add an email to block"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <button className="btn-ghost" disabled={add.isPending}>
+          {add.isPending ? 'Adding…' : 'Block'}
+        </button>
+      </form>
+      {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
+
+      {isLoading && <p className="text-sm text-slate-500">Loading…</p>}
+      {!isLoading && !suppressions?.length && (
+        <p className="text-sm text-slate-500">No suppressed addresses yet.</p>
+      )}
+
+      <div className="max-h-72 space-y-1 overflow-y-auto">
+        {suppressions?.map((s) => (
+          <div
+            key={s.id}
+            className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5"
+          >
+            <div className="min-w-0">
+              <div className="truncate text-slate-200">{s.email}</div>
+              <div className="text-[11px] text-slate-500">
+                {new Date(s.createdAt).toLocaleDateString()}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`rounded px-1.5 py-0.5 text-[10px] ${reasonClass(s.reason)}`}>
+                {s.reason}
+              </span>
+              <button
+                className="text-xs text-red-300 hover:underline"
+                onClick={() => remove.mutate(s.id)}
+              >
+                remove
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

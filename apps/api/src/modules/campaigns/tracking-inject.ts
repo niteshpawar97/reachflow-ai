@@ -52,3 +52,17 @@ export function trackingBaseUrl(): string {
   const prefix = process.env.API_PREFIX ?? 'api';
   return `http://localhost:${port}/${prefix}`;
 }
+
+/**
+ * Appends an unsubscribe footer. MUST run AFTER injectTracking (whose click-wrap
+ * regex would otherwise re-wrap this link too — this href points straight at
+ * our own unsubscribe endpoint, not a click-tracked destination).
+ */
+export function appendUnsubscribeFooter(html: string, token: string, baseUrl: string): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  const url = `${base}/tracking/unsubscribe/${token}`;
+  const footer = `<p style="margin-top:16px;font-size:11px;color:#94a3b8">
+    <a href="${url}" style="color:#94a3b8">Unsubscribe</a>
+  </p>`;
+  return `${html}\n${footer}`;
+}
