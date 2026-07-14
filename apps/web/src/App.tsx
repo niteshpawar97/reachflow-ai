@@ -6,6 +6,7 @@ import { RegisterPage } from './features/auth/RegisterPage';
 import { useAuthBootstrap } from './features/auth/useAuth';
 import { DashboardPage } from './pages/DashboardPage';
 import { CampaignsPage } from './pages/CampaignsPage';
+import { InboxPage } from './pages/InboxPage';
 import { LeadsPage } from './pages/LeadsPage';
 import { MailboxesPage } from './pages/MailboxesPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -29,6 +30,7 @@ export function App() {
           <Route path="/leads" element={<LeadsPage />} />
           <Route path="/campaigns" element={<CampaignsPage />} />
           <Route path="/mailboxes" element={<MailboxesPage />} />
+          <Route path="/inbox" element={<InboxPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

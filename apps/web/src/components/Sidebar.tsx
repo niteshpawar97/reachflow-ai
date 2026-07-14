@@ -13,7 +13,7 @@ const NAV: NavItem[] = [
   { to: '/leads', label: 'Leads', icon: '◈' },
   { to: '/campaigns', label: 'Campaigns', icon: '✉' },
   { to: '/mailboxes', label: 'Mailboxes', icon: '✱' },
-  { to: '/inbox', label: 'Inbox', icon: '⌂', soon: true },
+  { to: '/inbox', label: 'Inbox', icon: '⌂' },
   { to: '/crm', label: 'CRM', icon: '⇄', soon: true },
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ];
